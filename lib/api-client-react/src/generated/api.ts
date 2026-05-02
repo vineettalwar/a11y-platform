@@ -1575,6 +1575,90 @@ export const useUpdateIssueStatus = <
 };
 
 /**
+ * @summary Stream an AI-generated fix suggestion for an accessibility issue
+ */
+export const getRequestIssueAiFixUrl = (id: number) => {
+  return `/api/github/issues/${id}/ai-fix`;
+};
+
+export const requestIssueAiFix = async (
+  id: number,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getRequestIssueAiFixUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRequestIssueAiFixMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestIssueAiFix>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestIssueAiFix>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["requestIssueAiFix"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestIssueAiFix>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return requestIssueAiFix(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestIssueAiFixMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestIssueAiFix>>
+>;
+
+export type RequestIssueAiFixMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Stream an AI-generated fix suggestion for an accessibility issue
+ */
+export const useRequestIssueAiFix = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestIssueAiFix>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestIssueAiFix>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRequestIssueAiFixMutationOptions(options));
+};
+
+/**
  * @summary Bulk update the status of multiple accessibility issues
  */
 export const getBulkUpdateIssueStatusUrl = () => {

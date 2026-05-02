@@ -552,9 +552,18 @@ function analyzeFileContent(content: string, filePath: string): Finding[] {
     "missing-header-landmark",
   ]);
 
+  // A JSX/TSX/Vue/Svelte file is treated as a page (document root) only when it is
+  // a known entrypoint: lives in a pages/views/routes/screens/layouts/app directory,
+  // has a common page filename, or contains HTML document skeleton markers / app mount calls.
+  const isPageJsxFile = /\.(jsx|tsx|vue|svelte)$/i.test(filePath) && (
+    /\/(pages?|views?|routes?|layouts?|screens?|app)\//i.test(filePath) ||
+    /\/(index|app|root|layout|page|_app|_document)\.(jsx|tsx|vue|svelte)$/i.test(filePath) ||
+    /<html[\s>]|<body[\s>]/i.test(content) ||
+    /createRoot\s*\(|ReactDOM\.render\s*\(|mount\s*\(/i.test(content)
+  );
+  const isPageFile = isHtmlFile || isPageJsxFile;
+
   for (const rule of WCAG_RULES) {
-    // Page-level rules only run on HTML/JSX/TSX/Vue/Svelte files
-    const isPageFile = isHtmlFile || /\.(jsx|tsx|vue|svelte)$/i.test(filePath);
     if (PAGE_LEVEL_RULES.has(rule.id) && !isPageFile) {
       continue;
     }
@@ -710,8 +719,9 @@ router.post("/github/scan", async (req: Request, res: Response) => {
       }
     }
 
+    let insertedIds: number[] = [];
     if (allFindings.length > 0) {
-      await db.insert(scanResults).values(
+      const rows = await db.insert(scanResults).values(
         allFindings.map((f) => ({
           userId,
           repoFullName,
@@ -725,7 +735,8 @@ router.post("/github/scan", async (req: Request, res: Response) => {
           wcagCriterion: f.wcagCriterion,
           status: "open",
         })),
-      );
+      ).returning({ id: scanResults.id });
+      insertedIds = rows.map((r) => r.id);
     }
 
     await db
@@ -767,7 +778,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
         scannedAt: new Date().toISOString(),
       },
       issues: allFindings.map((f, i) => ({
-        id: `ISS-${String(i + 1).padStart(2, "0")}`,
+        id: insertedIds[i] ?? i + 1,
         filePath: f.filePath,
         lineNumber: f.lineNumber,
         ruleId: f.ruleId,
@@ -888,8 +899,9 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
       }
     }
 
+    let streamInsertedIds: number[] = [];
     if (allFindings.length > 0) {
-      await db.insert(scanResults).values(
+      const rows = await db.insert(scanResults).values(
         allFindings.map((f) => ({
           userId,
           repoFullName,
@@ -903,7 +915,8 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
           wcagCriterion: f.wcagCriterion,
           status: "open",
         })),
-      );
+      ).returning({ id: scanResults.id });
+      streamInsertedIds = rows.map((r) => r.id);
     }
 
     await db
@@ -945,7 +958,7 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
         scannedAt: new Date().toISOString(),
       },
       issues: allFindings.map((f, i) => ({
-        id: `ISS-${String(i + 1).padStart(2, "0")}`,
+        id: streamInsertedIds[i] ?? i + 1,
         filePath: f.filePath,
         lineNumber: f.lineNumber,
         ruleId: f.ruleId,

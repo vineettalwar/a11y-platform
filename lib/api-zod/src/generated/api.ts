@@ -294,6 +294,13 @@ export const UpdateIssueStatusResponse = zod.object({
 });
 
 /**
+ * @summary Stream an AI-generated fix suggestion for an accessibility issue
+ */
+export const RequestIssueAiFixParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Bulk update the status of multiple accessibility issues
  */
 export const BulkUpdateIssueStatusBody = zod.object({
