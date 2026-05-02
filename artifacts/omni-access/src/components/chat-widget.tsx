@@ -38,6 +38,10 @@ export default function ChatWidget() {
     setIsLoading(true);
 
     try {
+      // Manual fetch is intentional here: the generated useSendChatMessage hook
+      // is a standard REST mutation and does not support SSE streaming.
+      // This widget reads the response body as a ReadableStream to display
+      // tokens incrementally as they arrive from the server.
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
