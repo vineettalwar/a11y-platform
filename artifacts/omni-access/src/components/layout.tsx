@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Shield } from "lucide-react";
+import { Shield, Menu } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetClose,
+} from "@/components/ui/sheet";
 import ChatWidget from "./chat-widget";
 import AccessibilityToolbar from "./accessibility-toolbar";
 
@@ -46,6 +52,49 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             </Button>
           </nav>
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                aria-label="Open menu"
+                data-testid="hamburger-menu"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="flex flex-col pt-12">
+              <nav className="flex flex-col gap-6 mt-4">
+                <SheetClose asChild>
+                  <Link
+                    href="/platform"
+                    className={`text-lg font-medium transition-colors hover:text-primary ${location === "/platform" ? "text-primary" : "text-foreground"}`}
+                    data-testid="mobile-link-platform"
+                  >
+                    Platform
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link
+                    href="/services"
+                    className={`text-lg font-medium transition-colors hover:text-primary ${location === "/services" ? "text-primary" : "text-foreground"}`}
+                    data-testid="mobile-link-services"
+                  >
+                    Services
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Button asChild className="w-full font-semibold mt-2">
+                    <Link href="/#consultation" data-testid="mobile-link-book-consultation">
+                      Book Consultation
+                    </Link>
+                  </Button>
+                </SheetClose>
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </header>
 
