@@ -41,3 +41,106 @@ export interface LeadResponse {
   message?: string;
   createdAt: string;
 }
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface SuccessResponse {
+  success: boolean;
+}
+
+export interface GithubConnectRequest {
+  token: string;
+}
+
+export interface GithubConnectResponse {
+  login: string;
+  avatarUrl: string;
+}
+
+export interface GithubStatusResponse {
+  connected: boolean;
+  login?: string;
+  avatarUrl?: string;
+}
+
+export interface GithubRepo {
+  id: number;
+  fullName: string;
+  name: string;
+  owner: string;
+  private: boolean;
+  description?: string;
+  defaultBranch: string;
+}
+
+export interface GithubReposResponse {
+  repos: GithubRepo[];
+}
+
+export interface ConnectRepoRequest {
+  repoFullName: string;
+}
+
+export interface ConnectedRepoItem {
+  id: number;
+  repoFullName: string;
+  repoOwner: string;
+  repoName: string;
+  lastScannedAt?: string;
+}
+
+export interface ConnectedRepoResponse {
+  repo: ConnectedRepoItem;
+}
+
+export interface ConnectedReposResponse {
+  repos: ConnectedRepoItem[];
+}
+
+export interface ScanRequest {
+  repoFullName: string;
+}
+
+export type ScanIssueSeverity =
+  (typeof ScanIssueSeverity)[keyof typeof ScanIssueSeverity];
+
+export const ScanIssueSeverity = {
+  critical: "critical",
+  serious: "serious",
+  moderate: "moderate",
+  minor: "minor",
+} as const;
+
+export interface ScanIssue {
+  id: string;
+  filePath: string;
+  lineNumber?: number;
+  ruleId: string;
+  severity: ScanIssueSeverity;
+  description: string;
+  element?: string;
+  wcagCriterion?: string;
+}
+
+export interface ScanSummary {
+  score: number;
+  totalIssues: number;
+  critical: number;
+  serious: number;
+  moderate: number;
+  minor: number;
+  filesScanned: number;
+  scannedAt: string;
+}
+
+export interface ScanResponse {
+  repoFullName: string;
+  summary?: ScanSummary | null;
+  issues: ScanIssue[];
+}
+
+export type GetScanResultsParams = {
+  repoFullName: string;
+};

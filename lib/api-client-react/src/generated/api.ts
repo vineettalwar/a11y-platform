@@ -18,9 +18,21 @@ import type {
 
 import type {
   ChatRequest,
+  ConnectRepoRequest,
+  ConnectedRepoResponse,
+  ConnectedReposResponse,
+  ErrorResponse,
+  GetScanResultsParams,
+  GithubConnectRequest,
+  GithubConnectResponse,
+  GithubReposResponse,
+  GithubStatusResponse,
   HealthStatus,
   LeadRequest,
   LeadResponse,
+  ScanRequest,
+  ScanResponse,
+  SuccessResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -280,3 +292,661 @@ export const useCaptureLead = <
 > => {
   return useMutation(getCaptureLeadMutationOptions(options));
 };
+
+/**
+ * @summary Connect GitHub with a Personal Access Token
+ */
+export const getConnectGithubUrl = () => {
+  return `/api/github/connect`;
+};
+
+export const connectGithub = async (
+  githubConnectRequest: GithubConnectRequest,
+  options?: RequestInit,
+): Promise<GithubConnectResponse> => {
+  return customFetch<GithubConnectResponse>(getConnectGithubUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(githubConnectRequest),
+  });
+};
+
+export const getConnectGithubMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof connectGithub>>,
+    TError,
+    { data: BodyType<GithubConnectRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof connectGithub>>,
+  TError,
+  { data: BodyType<GithubConnectRequest> },
+  TContext
+> => {
+  const mutationKey = ["connectGithub"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof connectGithub>>,
+    { data: BodyType<GithubConnectRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return connectGithub(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConnectGithubMutationResult = NonNullable<
+  Awaited<ReturnType<typeof connectGithub>>
+>;
+export type ConnectGithubMutationBody = BodyType<GithubConnectRequest>;
+export type ConnectGithubMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Connect GitHub with a Personal Access Token
+ */
+export const useConnectGithub = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof connectGithub>>,
+    TError,
+    { data: BodyType<GithubConnectRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof connectGithub>>,
+  TError,
+  { data: BodyType<GithubConnectRequest> },
+  TContext
+> => {
+  return useMutation(getConnectGithubMutationOptions(options));
+};
+
+/**
+ * @summary Get current GitHub connection status
+ */
+export const getGetGithubStatusUrl = () => {
+  return `/api/github/status`;
+};
+
+export const getGithubStatus = async (
+  options?: RequestInit,
+): Promise<GithubStatusResponse> => {
+  return customFetch<GithubStatusResponse>(getGetGithubStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetGithubStatusQueryKey = () => {
+  return [`/api/github/status`] as const;
+};
+
+export const getGetGithubStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGithubStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getGithubStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetGithubStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getGithubStatus>>> = ({
+    signal,
+  }) => getGithubStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGithubStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGithubStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGithubStatus>>
+>;
+export type GetGithubStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get current GitHub connection status
+ */
+
+export function useGetGithubStatus<
+  TData = Awaited<ReturnType<typeof getGithubStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getGithubStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGithubStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Disconnect GitHub integration
+ */
+export const getDisconnectGithubUrl = () => {
+  return `/api/github/disconnect`;
+};
+
+export const disconnectGithub = async (
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getDisconnectGithubUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDisconnectGithubMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectGithub>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof disconnectGithub>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["disconnectGithub"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof disconnectGithub>>,
+    void
+  > = () => {
+    return disconnectGithub(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DisconnectGithubMutationResult = NonNullable<
+  Awaited<ReturnType<typeof disconnectGithub>>
+>;
+
+export type DisconnectGithubMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Disconnect GitHub integration
+ */
+export const useDisconnectGithub = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectGithub>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof disconnectGithub>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDisconnectGithubMutationOptions(options));
+};
+
+/**
+ * @summary List GitHub repositories
+ */
+export const getListGithubReposUrl = () => {
+  return `/api/github/repos`;
+};
+
+export const listGithubRepos = async (
+  options?: RequestInit,
+): Promise<GithubReposResponse> => {
+  return customFetch<GithubReposResponse>(getListGithubReposUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListGithubReposQueryKey = () => {
+  return [`/api/github/repos`] as const;
+};
+
+export const getListGithubReposQueryOptions = <
+  TData = Awaited<ReturnType<typeof listGithubRepos>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listGithubRepos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListGithubReposQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listGithubRepos>>> = ({
+    signal,
+  }) => listGithubRepos({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listGithubRepos>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListGithubReposQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listGithubRepos>>
+>;
+export type ListGithubReposQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List GitHub repositories
+ */
+
+export function useListGithubRepos<
+  TData = Awaited<ReturnType<typeof listGithubRepos>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listGithubRepos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListGithubReposQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Connect a repository for scanning
+ */
+export const getConnectRepoUrl = () => {
+  return `/api/github/connect-repo`;
+};
+
+export const connectRepo = async (
+  connectRepoRequest: ConnectRepoRequest,
+  options?: RequestInit,
+): Promise<ConnectedRepoResponse> => {
+  return customFetch<ConnectedRepoResponse>(getConnectRepoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(connectRepoRequest),
+  });
+};
+
+export const getConnectRepoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof connectRepo>>,
+    TError,
+    { data: BodyType<ConnectRepoRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof connectRepo>>,
+  TError,
+  { data: BodyType<ConnectRepoRequest> },
+  TContext
+> => {
+  const mutationKey = ["connectRepo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof connectRepo>>,
+    { data: BodyType<ConnectRepoRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return connectRepo(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConnectRepoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof connectRepo>>
+>;
+export type ConnectRepoMutationBody = BodyType<ConnectRepoRequest>;
+export type ConnectRepoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Connect a repository for scanning
+ */
+export const useConnectRepo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof connectRepo>>,
+    TError,
+    { data: BodyType<ConnectRepoRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof connectRepo>>,
+  TError,
+  { data: BodyType<ConnectRepoRequest> },
+  TContext
+> => {
+  return useMutation(getConnectRepoMutationOptions(options));
+};
+
+/**
+ * @summary List connected repositories
+ */
+export const getGetConnectedReposUrl = () => {
+  return `/api/github/connected-repos`;
+};
+
+export const getConnectedRepos = async (
+  options?: RequestInit,
+): Promise<ConnectedReposResponse> => {
+  return customFetch<ConnectedReposResponse>(getGetConnectedReposUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetConnectedReposQueryKey = () => {
+  return [`/api/github/connected-repos`] as const;
+};
+
+export const getGetConnectedReposQueryOptions = <
+  TData = Awaited<ReturnType<typeof getConnectedRepos>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getConnectedRepos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetConnectedReposQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getConnectedRepos>>
+  > = ({ signal }) => getConnectedRepos({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getConnectedRepos>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetConnectedReposQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getConnectedRepos>>
+>;
+export type GetConnectedReposQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List connected repositories
+ */
+
+export function useGetConnectedRepos<
+  TData = Awaited<ReturnType<typeof getConnectedRepos>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getConnectedRepos>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetConnectedReposQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Scan a repository for accessibility violations
+ */
+export const getScanRepoUrl = () => {
+  return `/api/github/scan`;
+};
+
+export const scanRepo = async (
+  scanRequest: ScanRequest,
+  options?: RequestInit,
+): Promise<ScanResponse> => {
+  return customFetch<ScanResponse>(getScanRepoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(scanRequest),
+  });
+};
+
+export const getScanRepoMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanRepo>>,
+    TError,
+    { data: BodyType<ScanRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scanRepo>>,
+  TError,
+  { data: BodyType<ScanRequest> },
+  TContext
+> => {
+  const mutationKey = ["scanRepo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scanRepo>>,
+    { data: BodyType<ScanRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scanRepo(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScanRepoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scanRepo>>
+>;
+export type ScanRepoMutationBody = BodyType<ScanRequest>;
+export type ScanRepoMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Scan a repository for accessibility violations
+ */
+export const useScanRepo = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanRepo>>,
+    TError,
+    { data: BodyType<ScanRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scanRepo>>,
+  TError,
+  { data: BodyType<ScanRequest> },
+  TContext
+> => {
+  return useMutation(getScanRepoMutationOptions(options));
+};
+
+/**
+ * @summary Get latest scan results for a repository
+ */
+export const getGetScanResultsUrl = (params: GetScanResultsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/github/scan-results?${stringifiedParams}`
+    : `/api/github/scan-results`;
+};
+
+export const getScanResults = async (
+  params: GetScanResultsParams,
+  options?: RequestInit,
+): Promise<ScanResponse> => {
+  return customFetch<ScanResponse>(getGetScanResultsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetScanResultsQueryKey = (params?: GetScanResultsParams) => {
+  return [`/api/github/scan-results`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetScanResultsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getScanResults>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetScanResultsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getScanResults>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetScanResultsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getScanResults>>> = ({
+    signal,
+  }) => getScanResults(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getScanResults>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetScanResultsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getScanResults>>
+>;
+export type GetScanResultsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get latest scan results for a repository
+ */
+
+export function useGetScanResults<
+  TData = Awaited<ReturnType<typeof getScanResults>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetScanResultsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getScanResults>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetScanResultsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

@@ -14,6 +14,8 @@ tags:
     description: AI chat operations
   - name: leads
     description: Lead capture operations
+  - name: github
+    description: GitHub integration operations
 paths:
   /healthz:
     get:
@@ -67,6 +69,152 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LeadResponse"
+
+  /github/connect:
+    post:
+      operationId: connectGithub
+      tags: [github]
+      summary: Connect GitHub with a Personal Access Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GithubConnectRequest"
+      responses:
+        "200":
+          description: GitHub connected successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GithubConnectResponse"
+        "401":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/status:
+    get:
+      operationId: getGithubStatus
+      tags: [github]
+      summary: Get current GitHub connection status
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GithubStatusResponse"
+
+  /github/disconnect:
+    delete:
+      operationId: disconnectGithub
+      tags: [github]
+      summary: Disconnect GitHub integration
+      responses:
+        "200":
+          description: Disconnected successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /github/repos:
+    get:
+      operationId: listGithubRepos
+      tags: [github]
+      summary: List GitHub repositories
+      responses:
+        "200":
+          description: List of repositories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GithubReposResponse"
+        "401":
+          description: Not connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/connect-repo:
+    post:
+      operationId: connectRepo
+      tags: [github]
+      summary: Connect a repository for scanning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectRepoRequest"
+      responses:
+        "200":
+          description: Repository connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectedRepoResponse"
+
+  /github/connected-repos:
+    get:
+      operationId: getConnectedRepos
+      tags: [github]
+      summary: List connected repositories
+      responses:
+        "200":
+          description: List of connected repos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectedReposResponse"
+
+  /github/scan:
+    post:
+      operationId: scanRepo
+      tags: [github]
+      summary: Scan a repository for accessibility violations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+      responses:
+        "200":
+          description: Scan completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResponse"
+        "401":
+          description: Not connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/scan-results:
+    get:
+      operationId: getScanResults
+      tags: [github]
+      summary: Get latest scan results for a repository
+      parameters:
+        - name: repoFullName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scan results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResponse"
 
 components:
   schemas:
@@ -136,3 +284,213 @@ components:
         - name
         - email
         - createdAt
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    GithubConnectRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token
+
+    GithubConnectResponse:
+      type: object
+      properties:
+        login:
+          type: string
+        avatarUrl:
+          type: string
+      required:
+        - login
+        - avatarUrl
+
+    GithubStatusResponse:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        login:
+          type: string
+        avatarUrl:
+          type: string
+      required:
+        - connected
+
+    GithubRepo:
+      type: object
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        name:
+          type: string
+        owner:
+          type: string
+        private:
+          type: boolean
+        description:
+          type: string
+        defaultBranch:
+          type: string
+      required:
+        - id
+        - fullName
+        - name
+        - owner
+        - private
+        - defaultBranch
+
+    GithubReposResponse:
+      type: object
+      properties:
+        repos:
+          type: array
+          items:
+            $ref: "#/components/schemas/GithubRepo"
+      required:
+        - repos
+
+    ConnectRepoRequest:
+      type: object
+      properties:
+        repoFullName:
+          type: string
+      required:
+        - repoFullName
+
+    ConnectedRepoItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        repoFullName:
+          type: string
+        repoOwner:
+          type: string
+        repoName:
+          type: string
+        lastScannedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - repoFullName
+        - repoOwner
+        - repoName
+
+    ConnectedRepoResponse:
+      type: object
+      properties:
+        repo:
+          $ref: "#/components/schemas/ConnectedRepoItem"
+      required:
+        - repo
+
+    ConnectedReposResponse:
+      type: object
+      properties:
+        repos:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectedRepoItem"
+      required:
+        - repos
+
+    ScanRequest:
+      type: object
+      properties:
+        repoFullName:
+          type: string
+      required:
+        - repoFullName
+
+    ScanIssue:
+      type: object
+      properties:
+        id:
+          type: string
+        filePath:
+          type: string
+        lineNumber:
+          type: integer
+        ruleId:
+          type: string
+        severity:
+          type: string
+          enum: [critical, serious, moderate, minor]
+        description:
+          type: string
+        element:
+          type: string
+        wcagCriterion:
+          type: string
+      required:
+        - id
+        - filePath
+        - ruleId
+        - severity
+        - description
+
+    ScanSummary:
+      type: object
+      properties:
+        score:
+          type: integer
+        totalIssues:
+          type: integer
+        critical:
+          type: integer
+        serious:
+          type: integer
+        moderate:
+          type: integer
+        minor:
+          type: integer
+        filesScanned:
+          type: integer
+        scannedAt:
+          type: string
+          format: date-time
+      required:
+        - score
+        - totalIssues
+        - critical
+        - serious
+        - moderate
+        - minor
+        - filesScanned
+        - scannedAt
+
+    ScanResponse:
+      type: object
+      properties:
+        repoFullName:
+          type: string
+        summary:
+          oneOf:
+            - $ref: "#/components/schemas/ScanSummary"
+            - type: "null"
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanIssue"
+      required:
+        - repoFullName
+        - issues

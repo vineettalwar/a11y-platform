@@ -37,3 +37,156 @@ export const CaptureLeadBody = zod.object({
   company: zod.string().optional(),
   message: zod.string().optional(),
 });
+
+/**
+ * @summary Connect GitHub with a Personal Access Token
+ */
+export const ConnectGithubBody = zod.object({
+  token: zod.string(),
+});
+
+export const ConnectGithubResponse = zod.object({
+  login: zod.string(),
+  avatarUrl: zod.string(),
+});
+
+/**
+ * @summary Get current GitHub connection status
+ */
+export const GetGithubStatusResponse = zod.object({
+  connected: zod.boolean(),
+  login: zod.string().optional(),
+  avatarUrl: zod.string().optional(),
+});
+
+/**
+ * @summary Disconnect GitHub integration
+ */
+export const DisconnectGithubResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary List GitHub repositories
+ */
+export const ListGithubReposResponse = zod.object({
+  repos: zod.array(
+    zod.object({
+      id: zod.number(),
+      fullName: zod.string(),
+      name: zod.string(),
+      owner: zod.string(),
+      private: zod.boolean(),
+      description: zod.string().optional(),
+      defaultBranch: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Connect a repository for scanning
+ */
+export const ConnectRepoBody = zod.object({
+  repoFullName: zod.string(),
+});
+
+export const ConnectRepoResponse = zod.object({
+  repo: zod.object({
+    id: zod.number(),
+    repoFullName: zod.string(),
+    repoOwner: zod.string(),
+    repoName: zod.string(),
+    lastScannedAt: zod.coerce.date().optional(),
+  }),
+});
+
+/**
+ * @summary List connected repositories
+ */
+export const GetConnectedReposResponse = zod.object({
+  repos: zod.array(
+    zod.object({
+      id: zod.number(),
+      repoFullName: zod.string(),
+      repoOwner: zod.string(),
+      repoName: zod.string(),
+      lastScannedAt: zod.coerce.date().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Scan a repository for accessibility violations
+ */
+export const ScanRepoBody = zod.object({
+  repoFullName: zod.string(),
+});
+
+export const ScanRepoResponse = zod.object({
+  repoFullName: zod.string(),
+  summary: zod
+    .union([
+      zod.object({
+        score: zod.number(),
+        totalIssues: zod.number(),
+        critical: zod.number(),
+        serious: zod.number(),
+        moderate: zod.number(),
+        minor: zod.number(),
+        filesScanned: zod.number(),
+        scannedAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  issues: zod.array(
+    zod.object({
+      id: zod.string(),
+      filePath: zod.string(),
+      lineNumber: zod.number().optional(),
+      ruleId: zod.string(),
+      severity: zod.enum(["critical", "serious", "moderate", "minor"]),
+      description: zod.string(),
+      element: zod.string().optional(),
+      wcagCriterion: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get latest scan results for a repository
+ */
+export const GetScanResultsQueryParams = zod.object({
+  repoFullName: zod.coerce.string(),
+});
+
+export const GetScanResultsResponse = zod.object({
+  repoFullName: zod.string(),
+  summary: zod
+    .union([
+      zod.object({
+        score: zod.number(),
+        totalIssues: zod.number(),
+        critical: zod.number(),
+        serious: zod.number(),
+        moderate: zod.number(),
+        minor: zod.number(),
+        filesScanned: zod.number(),
+        scannedAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  issues: zod.array(
+    zod.object({
+      id: zod.string(),
+      filePath: zod.string(),
+      lineNumber: zod.number().optional(),
+      ruleId: zod.string(),
+      severity: zod.enum(["critical", "serious", "moderate", "minor"]),
+      description: zod.string(),
+      element: zod.string().optional(),
+      wcagCriterion: zod.string().optional(),
+    }),
+  ),
+});
