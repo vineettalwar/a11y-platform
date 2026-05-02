@@ -108,7 +108,8 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
   const esRef = useRef<EventSource | null>(null);
 
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
-  const { data: status, isLoading: statusLoading } = useGetGithubStatus({ query: { enabled: isAuthenticated, queryKey: [] } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: status, isLoading: statusLoading } = useGetGithubStatus({ query: { enabled: isAuthenticated } as any });
 
   useEffect(() => {
     if (autoOpenConnect && !statusLoading) {
@@ -121,7 +122,8 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
   }, [autoOpenConnect, status?.connected, statusLoading]);
   const connectMutation = useConnectGithub();
   const disconnectMutation = useDisconnectGithub();
-  const { data: reposData, isLoading: reposLoading } = useListGithubRepos({ query: { enabled: status?.connected === true, queryKey: [] } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: reposData, isLoading: reposLoading } = useListGithubRepos({ query: { enabled: status?.connected === true } as any });
   const { data: connectedReposData, refetch: refetchConnectedRepos } = useGetConnectedRepos();
   const connectRepoMutation = useConnectRepo();
 
@@ -573,7 +575,8 @@ function ComplianceTrendChart({ repoFullName }: { repoFullName: string }) {
   const owner = parts[0] ?? "";
   const repo = parts[1] ?? "";
   const { data: historyData, isLoading: loading } = useGetRepoScanHistory(owner, repo, {
-    query: { enabled: parts.length === 2 && !!owner && !!repo, queryKey: [] },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: { enabled: parts.length === 2 && !!owner && !!repo } as any,
   });
   const history: ScanHistoryPoint[] = (historyData?.history ?? []).map((h) => ({
     scannedAt: h.scannedAt,
@@ -841,9 +844,10 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [issueStatuses, setIssueStatuses] = useState<Record<string, string>>({});
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: scanData, isLoading } = useGetScanResults(
     { repoFullName: repoFullName ?? "" },
-    { query: { enabled: isLive, queryKey: [] } }
+    { query: { enabled: isLive } as any }
   );
 
   const hasResults = isLive && !!scanData?.summary;
@@ -1300,9 +1304,10 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const isLive = !!repoFullName;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: scanData } = useGetScanResults(
     { repoFullName: repoFullName ?? "" },
-    { query: { enabled: isLive, queryKey: [] } }
+    { query: { enabled: isLive } as any }
   );
 
   const hasResults = isLive && !!scanData?.summary;

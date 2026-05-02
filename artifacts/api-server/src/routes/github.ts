@@ -1095,7 +1095,7 @@ router.patch("/github/issues/:id/status", async (req: Request, res: Response) =>
       return;
     }
 
-    res.json({ id: updated.id, status: updated.status });
+    res.json({ updated: true, status: updated.status });
   } catch (err: unknown) {
     console.error("Issue status update error:", err);
     res.status(500).json({ error: "Internal server error" });
