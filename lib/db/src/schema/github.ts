@@ -50,6 +50,7 @@ export const scanHistory = pgTable("scan_history", {
   seriousCount: integer("serious_count").notNull().default(0),
   moderateCount: integer("moderate_count").notNull().default(0),
   minorCount: integer("minor_count").notNull().default(0),
+  filesScanned: integer("files_scanned").notNull().default(0),
 });
 
 export const insertGithubConnectionSchema = createInsertSchema(githubConnections).omit({

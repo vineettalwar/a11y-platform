@@ -766,6 +766,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
       seriousCount: counts.serious,
       moderateCount: counts.moderate,
       minorCount: counts.minor,
+      filesScanned: filesToScan.length,
     });
 
     res.json({
@@ -946,6 +947,7 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
       seriousCount: counts.serious,
       moderateCount: counts.moderate,
       minorCount: counts.minor,
+      filesScanned: filesToScan.length,
     });
 
     send("complete", {
@@ -1034,7 +1036,7 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
           serious: 0,
           moderate: 0,
           minor: 0,
-          filesScanned: 0,
+          filesScanned: latestHistory.filesScanned,
           scannedAt: latestHistory.scannedAt.toISOString(),
         },
         issues: [],
@@ -1054,7 +1056,7 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
         score: latestHistory.complianceScore,
         totalIssues: results.length,
         ...counts,
-        filesScanned: new Set(results.map((r) => r.filePath)).size,
+        filesScanned: latestHistory.filesScanned,
         scannedAt: latestHistory.scannedAt.toISOString(),
       },
       issues: results.map((r) => ({
@@ -1143,12 +1145,13 @@ router.post("/github/issues/bulk-status", async (req: Request, res: Response) =>
       return;
     }
 
-    await db
+    const updatedRows = await db
       .update(scanResults)
       .set({ status })
-      .where(and(eq(scanResults.userId, userId), inArray(scanResults.id, numericIds)));
+      .where(and(eq(scanResults.userId, userId), inArray(scanResults.id, numericIds)))
+      .returning({ id: scanResults.id });
 
-    res.json({ updated: numericIds.length, status });
+    res.json({ updated: updatedRows.length, status });
   } catch (err: unknown) {
     console.error("Bulk status update error:", err);
     res.status(500).json({ error: "Internal server error" });
