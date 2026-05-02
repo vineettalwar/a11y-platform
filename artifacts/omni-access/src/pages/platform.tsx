@@ -59,9 +59,9 @@ interface ScanHistoryPoint {
 const STATIC_ISSUES: Issue[] = [
   { id: "ISS-01", severity: "critical", wcagCriterion: "1.1.1 Non-text Content", element: "<img src='hero.jpg'>", filePath: "/checkout", description: "Image missing alt attribute", status: "open" },
   { id: "ISS-02", severity: "critical", wcagCriterion: "2.1.1 Keyboard", element: "<div onClick={submit}>", filePath: "/cart", description: "Interactive div using onClick without keyboard support — use a button or add onKeyDown", status: "open" },
-  { id: "ISS-03", severity: "critical", wcagCriterion: "1.4.3 Contrast (Minimum)", element: "<span class='text-gray-400'>", filePath: "/login", description: "Text colour does not meet minimum contrast ratio against its background", status: "in-progress" },
+  { id: "ISS-03", severity: "critical", wcagCriterion: "1.4.3 Contrast (Minimum)", element: "<span class='text-gray-400'>", filePath: "/login", description: "Text colour does not meet minimum contrast ratio against its background", status: "in_progress" },
   { id: "ISS-04", severity: "serious", wcagCriterion: "4.1.2 Name, Role, Value", element: "<button class='btn'>", filePath: "/profile", description: "Button has no text content or accessible label", status: "open" },
-  { id: "ISS-05", severity: "serious", wcagCriterion: "1.3.1 Info and Relationships", element: "<table> (no th)", filePath: "/dashboard", description: "Table without header cells — screen readers cannot associate data cells", status: "in-progress" },
+  { id: "ISS-05", severity: "serious", wcagCriterion: "1.3.1 Info and Relationships", element: "<table> (no th)", filePath: "/dashboard", description: "Table without header cells — screen readers cannot associate data cells", status: "in_progress" },
   { id: "ISS-06", severity: "serious", wcagCriterion: "2.4.7 Focus Visible", element: "input:focus { outline: none }", filePath: "Global", description: "Focus outline removed — keyboard users lose focus visibility", status: "resolved" },
   { id: "ISS-07", severity: "moderate", wcagCriterion: "2.4.4 Link Purpose", element: "<a href='/#'>Click here</a>", filePath: "/blog", description: "Non-descriptive link text — screen reader users cannot determine link purpose", status: "open" },
   { id: "ISS-08", severity: "minor", wcagCriterion: "1.4.4 Resize text", element: "meta viewport maximum-scale=1", filePath: "Global", description: "Viewport meta restricts zooming — users with low vision cannot enlarge text", status: "resolved" },
@@ -80,7 +80,7 @@ const getSeverityBadge = (severity: string) => {
 const getStatusBadge = (status: string) => {
   switch (status) {
     case "open": return <Badge variant="outline" className="text-destructive border-destructive/50 bg-destructive/10">Open</Badge>;
-    case "in-progress": return <Badge variant="outline" className="text-orange-600 border-orange-500/50 bg-orange-500/10">In Progress</Badge>;
+    case "in_progress": return <Badge variant="outline" className="text-orange-600 border-orange-500/50 bg-orange-500/10">In Progress</Badge>;
     case "resolved": return <Badge variant="outline" className="text-green-700 border-green-600/50 bg-green-600/10 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Resolved</Badge>;
     default: return null;
   }
@@ -765,7 +765,7 @@ function IssueDetailSheet({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
                       <SelectItem value="resolved">Resolved</SelectItem>
                     </SelectContent>
                   </Select>
@@ -865,7 +865,7 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
 
   const totalIssues = hasResults ? scanData!.summary!.totalIssues : 47;
   const critical = hasResults ? scanData!.summary!.critical : 8;
-  const inProgress = issues.filter((i) => i.status === "in-progress").length;
+  const inProgress = issues.filter((i) => i.status === "in_progress").length;
   const resolved = issues.filter((i) => i.status === "resolved").length;
   const scannedAt = hasResults ? new Date(scanData!.summary!.scannedAt).toLocaleString() : "Today 08:00 AM";
 
@@ -1431,7 +1431,7 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="resolved">Resolved</SelectItem>
           </SelectContent>
         </Select>
@@ -1547,7 +1547,7 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
             variant="outline"
             className="h-7 text-xs gap-1 text-orange-600 border-orange-500/40"
             disabled={bulkUpdating || !hasResults}
-            onClick={() => handleBulkStatus("in-progress")}
+            onClick={() => handleBulkStatus("in_progress")}
             data-testid="bulk-mark-in-progress"
           >
             In Progress

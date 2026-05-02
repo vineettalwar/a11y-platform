@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { db, githubConnections, connectedRepos, scanResults, scanHistory } from "@workspace/db";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { ARIA_SYSTEM_PROMPT } from "./chat";
 
 const router = Router();
 
@@ -466,6 +467,22 @@ const WCAG_RULES: WcagRule[] = [
     wcagCriterion: "2.4.1 Bypass Blocks",
     getElement: () => "(no skip-nav anchor found)",
   },
+  {
+    id: "missing-nav-landmark",
+    pattern: /^(?![\s\S]*<nav[\s>])[\s\S]*$/gi,
+    severity: "moderate",
+    description: "Page missing <nav> landmark — screen reader users cannot navigate directly to navigation regions",
+    wcagCriterion: "1.3.6 Identify Purpose",
+    getElement: () => "(no <nav> landmark found)",
+  },
+  {
+    id: "missing-header-landmark",
+    pattern: /^(?![\s\S]*<header[\s>])[\s\S]*$/gi,
+    severity: "minor",
+    description: "Page missing <header> landmark — site header region is not identified for assistive technologies",
+    wcagCriterion: "1.3.6 Identify Purpose",
+    getElement: () => "(no <header> landmark found)",
+  },
 ];
 
 interface Finding {
@@ -481,10 +498,42 @@ function analyzeFileContent(content: string, filePath: string): Finding[] {
   const findings: Finding[] = [];
   const isHtmlFile = /\.(html|htm)$/i.test(filePath);
 
+  // Duplicate ID check (custom logic — cannot be done with a simple regex)
+  const PAGE_EXTENSIONS = /\.(html|htm|jsx|tsx|vue|svelte)$/i;
+  if (PAGE_EXTENSIONS.test(filePath)) {
+    const idRegex = /\bid\s*=\s*["']([^"']+)["']/gi;
+    const idCounts = new Map<string, number>();
+    let idMatch: RegExpExecArray | null;
+    while ((idMatch = idRegex.exec(content)) !== null) {
+      const idVal = idMatch[1]!.trim();
+      idCounts.set(idVal, (idCounts.get(idVal) ?? 0) + 1);
+    }
+    for (const [idVal, count] of idCounts) {
+      if (count > 1) {
+        findings.push({
+          ruleId: "duplicate-id",
+          severity: "critical",
+          description: `Duplicate id="${idVal}" found ${count} times — IDs must be unique per page`,
+          wcagCriterion: "4.1.1 Parsing",
+          element: `id="${idVal}"`,
+          lineNumber: 1,
+        });
+        if (findings.length >= 50) return findings;
+      }
+    }
+  }
+
+  const PAGE_LEVEL_RULES = new Set([
+    "missing-main-landmark",
+    "missing-skip-nav",
+    "missing-nav-landmark",
+    "missing-header-landmark",
+  ]);
+
   for (const rule of WCAG_RULES) {
-    // Page-level rules (missing-main-landmark, missing-skip-nav) only run on HTML/JSX/TSX/Vue/Svelte
+    // Page-level rules only run on HTML/JSX/TSX/Vue/Svelte files
     const isPageFile = isHtmlFile || /\.(jsx|tsx|vue|svelte)$/i.test(filePath);
-    if ((rule.id === "missing-main-landmark" || rule.id === "missing-skip-nav") && !isPageFile) {
+    if (PAGE_LEVEL_RULES.has(rule.id) && !isPageFile) {
       continue;
     }
 
@@ -492,7 +541,7 @@ function analyzeFileContent(content: string, filePath: string): Finding[] {
     let match: RegExpExecArray | null;
 
     // Page-level rules that fire at most once per file
-    if (rule.id === "missing-main-landmark" || rule.id === "missing-skip-nav") {
+    if (PAGE_LEVEL_RULES.has(rule.id)) {
       match = regex.exec(content);
       if (match) {
         findings.push({
@@ -1007,7 +1056,7 @@ router.patch("/github/issues/:id/status", async (req: Request, res: Response) =>
     }
 
     const { status } = req.body as { status?: unknown };
-    const VALID_STATUSES = ["open", "in-progress", "resolved"];
+    const VALID_STATUSES = ["open", "in_progress", "resolved"];
     if (!status || typeof status !== "string" || !VALID_STATUSES.includes(status)) {
       res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
       return;
@@ -1042,7 +1091,7 @@ router.post("/github/issues/bulk-status", async (req: Request, res: Response) =>
     const userId = req.user.id;
     const { ids, status } = req.body as { ids?: unknown; status?: unknown };
 
-    const VALID_STATUSES = ["open", "in-progress", "resolved"];
+    const VALID_STATUSES = ["open", "in_progress", "resolved"];
     if (!status || typeof status !== "string" || !VALID_STATUSES.includes(status)) {
       res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
       return;
@@ -1114,15 +1163,6 @@ router.get("/github/repos/:owner/:repo/scan-history", async (req: Request, res: 
 });
 
 // POST /api/github/issues/:id/ai-fix
-const AI_FIX_SYSTEM_PROMPT = `You are the Lead Digital Accessibility Consultant and Brand Voice for OmniAccess. You are an expert in WCAG 2.2, European Accessibility Act (EAA) compliance, and sustainable, "Shift-Left" development practices. Your tone is authoritative, warm, transparent, and fiercely ethical.
-
-When given an accessibility issue, provide a specific, actionable code remediation. Format your response as:
-
-1. A brief one-sentence explanation of why this matters
-2. The specific code fix (with a before/after code block)
-3. A short note on how to verify the fix works
-
-Be concise and developer-focused. Use markdown code blocks with appropriate language tags.`;
 
 router.post("/github/issues/:id/ai-fix", async (req: Request, res: Response) => {
   try {
@@ -1168,7 +1208,7 @@ Provide the remediation code specific to this exact element and rule.`;
       model: "gpt-4.1",
       max_completion_tokens: 1024,
       messages: [
-        { role: "system", content: AI_FIX_SYSTEM_PROMPT },
+        { role: "system", content: ARIA_SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ],
       stream: true,
