@@ -2,15 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import { AlertTriangle, AlertCircle, Info, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function Platform() {
-  const complianceData = [
-    { name: "Compliant", value: 74, color: "hsl(var(--accent))" },
-    { name: "Non-Compliant", value: 26, color: "hsl(var(--muted))" },
-  ];
+  const complianceScore = 74;
 
   const issues = [
     { id: "ISS-01", severity: "critical", criterion: "1.1.1 Non-text Content", element: "<img src='hero.jpg'>", page: "/checkout", status: "open" },
@@ -100,29 +96,33 @@ export default function Platform() {
               <CardDescription>Overall WCAG 2.2 AA adherence</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col items-center justify-center">
-              <div className="relative h-48 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={complianceData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      startAngle={90}
-                      endAngle={-270}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {complianceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip formatter={(value) => `${value}%`} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="relative w-full" style={{ aspectRatio: "1 / 1" }}>
+                <svg width="100%" height="100%" viewBox="0 0 200 200">
+                  {/* Background ring (non-compliant) */}
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r="80"
+                    fill="none"
+                    stroke="hsl(var(--muted))"
+                    strokeWidth="20"
+                  />
+                  {/* Foreground arc (compliant) */}
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r="80"
+                    fill="none"
+                    stroke="hsl(var(--accent))"
+                    strokeWidth="20"
+                    strokeDasharray={`${2 * Math.PI * 80 * (complianceScore / 100)} ${2 * Math.PI * 80}`}
+                    strokeDashoffset={`${2 * Math.PI * 80 * 0.25}`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 100 100)"
+                  />
+                </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-4xl font-serif font-bold text-primary">74%</span>
+                  <span className="text-4xl font-serif font-bold text-primary">{complianceScore}%</span>
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Score</span>
                 </div>
               </div>
