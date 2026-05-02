@@ -5,18 +5,26 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ChatRequest,
+  HealthStatus,
+  LeadRequest,
+  LeadResponse,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +107,176 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Sends a message to the AI accessibility consultant and returns a streaming response via SSE
+ * @summary Send a message to the OmniAccess AI consultant
+ */
+export const getSendChatMessageUrl = () => {
+  return `/api/chat`;
+};
+
+export const sendChatMessage = async (
+  chatRequest: ChatRequest,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getSendChatMessageUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(chatRequest),
+  });
+};
+
+export const getSendChatMessageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendChatMessage>>,
+    TError,
+    { data: BodyType<ChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendChatMessage>>,
+  TError,
+  { data: BodyType<ChatRequest> },
+  TContext
+> => {
+  const mutationKey = ["sendChatMessage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendChatMessage>>,
+    { data: BodyType<ChatRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sendChatMessage(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendChatMessageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendChatMessage>>
+>;
+export type SendChatMessageMutationBody = BodyType<ChatRequest>;
+export type SendChatMessageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Send a message to the OmniAccess AI consultant
+ */
+export const useSendChatMessage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendChatMessage>>,
+    TError,
+    { data: BodyType<ChatRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendChatMessage>>,
+  TError,
+  { data: BodyType<ChatRequest> },
+  TContext
+> => {
+  return useMutation(getSendChatMessageMutationOptions(options));
+};
+
+/**
+ * @summary Capture a consultation lead
+ */
+export const getCaptureLeadUrl = () => {
+  return `/api/leads`;
+};
+
+export const captureLead = async (
+  leadRequest: LeadRequest,
+  options?: RequestInit,
+): Promise<LeadResponse> => {
+  return customFetch<LeadResponse>(getCaptureLeadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(leadRequest),
+  });
+};
+
+export const getCaptureLeadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof captureLead>>,
+    TError,
+    { data: BodyType<LeadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof captureLead>>,
+  TError,
+  { data: BodyType<LeadRequest> },
+  TContext
+> => {
+  const mutationKey = ["captureLead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof captureLead>>,
+    { data: BodyType<LeadRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return captureLead(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CaptureLeadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof captureLead>>
+>;
+export type CaptureLeadMutationBody = BodyType<LeadRequest>;
+export type CaptureLeadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Capture a consultation lead
+ */
+export const useCaptureLead = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof captureLead>>,
+    TError,
+    { data: BodyType<LeadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof captureLead>>,
+  TError,
+  { data: BodyType<LeadRequest> },
+  TContext
+> => {
+  return useMutation(getCaptureLeadMutationOptions(options));
+};

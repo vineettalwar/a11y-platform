@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: chat
+    description: AI chat operations
+  - name: leads
+    description: Lead capture operations
 paths:
   /healthz:
     get:
@@ -24,6 +28,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /chat:
+    post:
+      operationId: sendChatMessage
+      tags: [chat]
+      summary: Send a message to the OmniAccess AI consultant
+      description: Sends a message to the AI accessibility consultant and returns a streaming response via SSE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: SSE stream of AI response chunks
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /leads:
+    post:
+      operationId: captureLead
+      tags: [leads]
+      summary: Capture a consultation lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadRequest"
+      responses:
+        "201":
+          description: Lead captured successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +78,61 @@ components:
       required:
         - status
 
+    ChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+      required:
+        - role
+        - content
+
+    ChatRequest:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+      required:
+        - messages
+
+    LeadRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        company:
+          type: string
+        message:
+          type: string
+      required:
+        - name
+        - email
+
+    LeadResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        company:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - email
+        - createdAt

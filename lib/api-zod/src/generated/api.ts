@@ -14,3 +14,26 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Sends a message to the AI accessibility consultant and returns a streaming response via SSE
+ * @summary Send a message to the OmniAccess AI consultant
+ */
+export const SendChatMessageBody = zod.object({
+  messages: zod.array(
+    zod.object({
+      role: zod.enum(["user", "assistant"]),
+      content: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Capture a consultation lead
+ */
+export const CaptureLeadBody = zod.object({
+  name: zod.string(),
+  email: zod.string(),
+  company: zod.string().optional(),
+  message: zod.string().optional(),
+});
