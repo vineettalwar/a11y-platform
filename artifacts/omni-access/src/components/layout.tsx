@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Shield, Menu, LogOut, User, Loader2 } from "lucide-react";
+import { Shield, Menu, LayoutDashboard, ClipboardCheck, AlertCircle, BarChart2, Settings, MessageSquare, UserCircle2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -10,12 +10,54 @@ import {
 } from "@/components/ui/sheet";
 import ChatWidget from "./chat-widget";
 import AccessibilityToolbar from "./accessibility-toolbar";
-import { useAuth } from "@workspace/replit-auth-web";
+
+const NAV_ITEMS = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, testId: "link-dashboard" },
+  { href: "/platform", label: "Audits", icon: ClipboardCheck, testId: "link-audits" },
+  { href: "/issues", label: "Issues", icon: AlertCircle, testId: "link-issues" },
+  { href: "/reports", label: "Reports", icon: BarChart2, testId: "link-reports" },
+  { href: "/settings", label: "Settings", icon: Settings, testId: "link-settings" },
+];
+
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  testId,
+  active,
+  onClick,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  testId?: string;
+  active: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      data-testid={testId}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
+    >
+      <Icon className="h-4 w-4 flex-shrink-0" />
+      <span>{label}</span>
+    </Link>
+  );
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [toolbarDismissed, setToolbarDismissed] = useState(false);
-  const { user, isLoading, isAuthenticated, login, logout } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  const sidebarTop = toolbarDismissed ? 0 : "2.25rem";
 
   return (
     <div
@@ -23,162 +65,128 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       style={{ paddingTop: toolbarDismissed ? 0 : "2.25rem" }}
     >
       <AccessibilityToolbar onDismissedChange={setToolbarDismissed} />
-      <header
-        className="sticky z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
-        style={{ top: toolbarDismissed ? 0 : "2.25rem" }}
-      >
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2" data-testid="link-home">
-            <Shield className="h-6 w-6 text-primary" />
-            <span className="font-serif font-bold text-xl tracking-tight">OmniAccess</span>
-          </Link>
 
-          <nav className="hidden md:flex items-center gap-6">
-            <Link
-              href="/platform"
-              className={`text-sm font-medium transition-colors hover:text-primary ${location === "/platform" ? "text-primary" : "text-muted-foreground"}`}
-              data-testid="link-platform"
-            >
-              Platform
-            </Link>
-            <Link
-              href="/services"
-              className={`text-sm font-medium transition-colors hover:text-primary ${location === "/services" ? "text-primary" : "text-muted-foreground"}`}
-              data-testid="link-services"
-            >
-              Services
-            </Link>
-            <Button asChild size="sm" className="ml-2 font-semibold">
-              <Link href="/#consultation" data-testid="link-book-consultation">
-                Book Consultation
-              </Link>
-            </Button>
-            <div className="border-l border-border pl-4 ml-2">
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              ) : isAuthenticated ? (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5" />
-                    {user?.firstName || user?.email || "Account"}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={logout} className="gap-1.5 text-muted-foreground h-8 px-2">
-                    <LogOut className="w-3.5 h-3.5" />
-                    Log out
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" onClick={login}>
-                  Log in
-                </Button>
-              )}
-            </div>
+      <div className="flex flex-1">
+        {/* Desktop sidebar */}
+        <aside
+          className="hidden md:flex flex-col fixed inset-y-0 left-0 z-40 w-56 border-r border-border bg-card"
+          style={{ top: sidebarTop }}
+          aria-label="Main navigation"
+        >
+          {/* Logo */}
+          <div className="flex items-center gap-2 px-4 py-4 border-b border-border flex-shrink-0">
+            <Shield className="h-5 w-5 text-primary" />
+            <span className="font-serif font-bold text-lg tracking-tight">OmniAccess</span>
+          </div>
+
+          {/* Nav links */}
+          <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.href}
+                {...item}
+                active={item.href === "/" ? location === "/" : location.startsWith(item.href)}
+              />
+            ))}
           </nav>
 
-          <Sheet>
-            <SheetTrigger asChild>
+          {/* Bottom utility area */}
+          <div className="px-2 py-3 border-t border-border space-y-1 flex-shrink-0">
+            <button
+              data-testid="btn-aria-chat"
+              aria-label="Open Aria chat assistant"
+              className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground w-full transition-colors text-left"
+              onClick={() => setChatOpen(true)}
+            >
+              <MessageSquare className="h-4 w-4 flex-shrink-0" />
+              <span>Aria Assistant</span>
+            </button>
+          </div>
+
+          {/* User account area */}
+          <div className="px-3 py-3 border-t border-border flex items-center gap-3 flex-shrink-0">
+            <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <UserCircle2 className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium truncate">Acme Corp</p>
+              <p className="text-[11px] text-muted-foreground truncate">Professional Plan</p>
+            </div>
+          </div>
+        </aside>
+
+        {/* Mobile header */}
+        <header
+          className="md:hidden fixed left-0 right-0 z-40 border-b border-border bg-card/95 backdrop-blur"
+          style={{ top: sidebarTop }}
+        >
+          <div className="h-14 flex items-center justify-between px-4">
+            <Link href="/" className="flex items-center gap-2" data-testid="link-home">
+              <Shield className="h-5 w-5 text-primary" />
+              <span className="font-serif font-bold text-lg tracking-tight">OmniAccess</span>
+            </Link>
+            <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="md:hidden"
-                aria-label="Open menu"
-                data-testid="hamburger-menu"
+                aria-label="Open Aria chat assistant"
+                data-testid="btn-aria-chat-mobile"
+                onClick={() => setChatOpen(true)}
               >
-                <Menu className="h-5 w-5" />
+                <MessageSquare className="h-4 w-4" />
               </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="flex flex-col pt-12">
-              <nav className="flex flex-col gap-6 mt-4">
-                <SheetClose asChild>
-                  <Link
-                    href="/platform"
-                    className={`text-lg font-medium transition-colors hover:text-primary ${location === "/platform" ? "text-primary" : "text-foreground"}`}
-                    data-testid="mobile-link-platform"
+              <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Open navigation"
+                    data-testid="hamburger-menu"
                   >
-                    Platform
-                  </Link>
-                </SheetClose>
-                <SheetClose asChild>
-                  <Link
-                    href="/services"
-                    className={`text-lg font-medium transition-colors hover:text-primary ${location === "/services" ? "text-primary" : "text-foreground"}`}
-                    data-testid="mobile-link-services"
-                  >
-                    Services
-                  </Link>
-                </SheetClose>
-                <SheetClose asChild>
-                  <Button asChild className="w-full font-semibold mt-2">
-                    <Link href="/#consultation" data-testid="mobile-link-book-consultation">
-                      Book Consultation
-                    </Link>
+                    <Menu className="h-5 w-5" />
                   </Button>
-                </SheetClose>
-                <div className="border-t border-border pt-4 mt-2">
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                  ) : isAuthenticated ? (
-                    <div className="flex flex-col gap-3">
-                      <span className="text-sm text-muted-foreground">
-                        {user?.firstName || user?.email || "Account"}
-                      </span>
-                      <Button variant="outline" size="sm" onClick={logout} className="gap-2 w-full">
-                        <LogOut className="w-3.5 h-3.5" /> Log out
-                      </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-64 p-0 flex flex-col">
+                  <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
+                    <Shield className="h-5 w-5 text-primary" />
+                    <span className="font-serif font-bold text-lg tracking-tight">OmniAccess</span>
+                  </div>
+                  <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+                    {NAV_ITEMS.map((item) => (
+                      <SheetClose key={item.href} asChild>
+                        <NavLink
+                          {...item}
+                          active={item.href === "/" ? location === "/" : location.startsWith(item.href)}
+                          onClick={() => setMobileOpen(false)}
+                        />
+                      </SheetClose>
+                    ))}
+                  </nav>
+                  <div className="px-3 py-3 border-t border-border flex items-center gap-3 flex-shrink-0">
+                    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <UserCircle2 className="h-4 w-4 text-primary" />
                     </div>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={login} className="w-full">
-                      Log in
-                    </Button>
-                  )}
-                </div>
-              </nav>
-            </SheetContent>
-          </Sheet>
-        </div>
-      </header>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">Acme Corp</p>
+                      <p className="text-[11px] text-muted-foreground truncate">Professional Plan</p>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+          </div>
+        </header>
 
-      <main id="main-content" className="flex-1">
-        {children}
-      </main>
-
-      <footer className="border-t border-border bg-card py-12">
-        <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div className="col-span-1 md:col-span-2">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <Shield className="h-6 w-6 text-primary" />
-              <span className="font-serif font-bold text-xl">OmniAccess</span>
-            </Link>
-            <p className="text-muted-foreground text-sm max-w-sm">
-              The anti-overlay accessibility platform. We fix the root problem at the source.
-              Precision engineering meets social conscience.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-serif font-semibold mb-4">Platform</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link href="/platform" className="hover:text-primary transition-colors">Governance Dashboard</Link></li>
-              <li><Link href="/services" className="hover:text-primary transition-colors">Remediation Roadmap</Link></li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-serif font-semibold mb-4">Company</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link href="/" className="hover:text-primary transition-colors">Manifesto</Link></li>
-              <li><Link href="/services" className="hover:text-primary transition-colors">Services</Link></li>
-            </ul>
-          </div>
+        {/* Main content */}
+        <div className="flex-1 md:ml-56">
+          <main id="main-content" className="min-h-[100dvh]">
+            <div className="md:hidden h-14" />
+            {children}
+          </main>
         </div>
-        <div className="container mx-auto px-4 mt-12 pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between text-xs text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} OmniAccess. All rights reserved.</p>
-          <div className="flex items-center gap-4 mt-4 md:mt-0">
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
-          </div>
-        </div>
-      </footer>
+      </div>
 
-      <ChatWidget />
+      <ChatWidget open={chatOpen} onOpenChange={setChatOpen} />
     </div>
   );
 }

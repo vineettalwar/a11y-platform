@@ -10,8 +10,18 @@ type Message = {
   content: string;
 };
 
-export default function ChatWidget() {
-  const [isOpen, setIsOpen] = useState(false);
+interface ChatWidgetProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export default function ChatWidget({ open: openProp, onOpenChange }: ChatWidgetProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = openProp !== undefined ? openProp : internalOpen;
+  const setIsOpen = (val: boolean) => {
+    if (onOpenChange) onOpenChange(val);
+    else setInternalOpen(val);
+  };
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -104,7 +114,7 @@ export default function ChatWidget() {
   return (
     <>
       <div className="fixed bottom-6 right-6 z-50">
-        {!isOpen && (
+        {!isOpen && onOpenChange === undefined && (
           <Button
             size="icon"
             className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"

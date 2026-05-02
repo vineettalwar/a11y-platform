@@ -3,13 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search, ExternalLink, FileCode2, X, LogIn } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search, ExternalLink, FileCode2, X, LogIn, FileDown, FileText, Filter } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import {
   useGetGithubStatus,
   useConnectGithub,
@@ -298,8 +301,8 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
               className="flex items-center justify-between border rounded-md px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors text-sm"
               onClick={() => setShowRepoDropdown((v) => !v)}
             >
-              <span className={selectedRepo ? "text-foreground" : "text-muted-foreground"}>
-                {selectedRepo || "Select a repository…"}
+              <span className={activeRepo ? "text-foreground" : "text-muted-foreground"}>
+                {activeRepo || "Select a repository…"}
               </span>
               {reposLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -843,6 +846,297 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
   );
 }
 
+export function ReportsTab() {
+  const { toast } = useToast();
+
+  const handleExport = (format: string) => {
+    toast({
+      title: `Exporting ${format} report…`,
+      description: "Your report will be ready to download shortly.",
+    });
+  };
+
+  return (
+    <div className="space-y-6" data-testid="tab-reports">
+      <div>
+        <h2 className="text-lg font-serif font-semibold text-primary">Reports & Exports</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">Generate and download compliance reports for stakeholders.</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card data-testid="card-export-pdf">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              <CardTitle className="font-serif text-base">PDF Compliance Report</CardTitle>
+            </div>
+            <CardDescription>Full audit report including issue details, WCAG citations, and remediation guidance. Suitable for executive review and legal documentation.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="gap-2" onClick={() => handleExport("PDF")} data-testid="btn-export-pdf">
+              <FileDown className="h-4 w-4" />
+              Export PDF Report
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-export-csv">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileDown className="h-5 w-5 text-primary" />
+              <CardTitle className="font-serif text-base">CSV Issue Export</CardTitle>
+            </div>
+            <CardDescription>Raw issue data in CSV format for import into Jira, Linear, or any project management tool. Includes all metadata fields.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="gap-2" onClick={() => handleExport("CSV")} data-testid="btn-export-csv">
+              <FileDown className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-report-schedule">
+          <CardHeader>
+            <CardTitle className="font-serif text-base">Scheduled Reports</CardTitle>
+            <CardDescription>Automatically send compliance reports to stakeholders on a schedule.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between p-3 border rounded-md bg-muted/30">
+              <div>
+                <p className="text-sm font-medium">Weekly Summary</p>
+                <p className="text-xs text-muted-foreground">Every Monday at 9:00 AM</p>
+              </div>
+              <Badge variant="outline" className="text-xs text-green-700 border-green-600/40 bg-green-600/10">Active</Badge>
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5" data-testid="btn-add-schedule">
+              <Filter className="h-3.5 w-3.5" /> Add Schedule
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-report-history">
+          <CardHeader>
+            <CardTitle className="font-serif text-base">Report History</CardTitle>
+            <CardDescription>Previously generated reports for this workspace.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[
+              { label: "April 2026 Full Audit", date: "Apr 30, 2026", format: "PDF" },
+              { label: "Q1 2026 Summary", date: "Mar 31, 2026", format: "PDF" },
+              { label: "Issue Export — Mar 2026", date: "Mar 15, 2026", format: "CSV" },
+            ].map((report, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 py-1.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{report.label}</p>
+                  <p className="text-xs text-muted-foreground">{report.date}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge variant="outline" className="text-xs">{report.format}</Badge>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => handleExport(report.format)}>
+                    <FileDown className="h-3 w-3" /> Download
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const isLive = !!repoFullName;
+
+  const { data: scanData } = useGetScanResults(
+    { repoFullName: repoFullName ?? "" },
+    { query: { enabled: isLive } }
+  );
+
+  const hasResults = isLive && scanData?.summary && scanData.summary.totalIssues >= 0 && scanData.issues.length > 0;
+
+  const allIssues: Issue[] = hasResults
+    ? scanData!.issues.map((issue) => ({
+        id: issue.id,
+        severity: issue.severity,
+        wcagCriterion: issue.wcagCriterion ?? issue.ruleId,
+        element: issue.element ?? issue.ruleId,
+        filePath: issue.filePath,
+        lineNumber: issue.lineNumber ?? undefined,
+        description: issue.description,
+        ruleId: issue.ruleId,
+        status: "open",
+      }))
+    : STATIC_ISSUES;
+
+  const filtered = allIssues.filter((issue) => {
+    const sevOk = severityFilter === "all" || issue.severity === severityFilter;
+    const stOk = statusFilter === "all" || issue.status === statusFilter;
+    return sevOk && stOk;
+  });
+
+  return (
+    <div className="space-y-4" data-testid="tab-issues">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Filter className="h-3.5 w-3.5" />
+          <span>Filter:</span>
+        </div>
+        <Select value={severityFilter} onValueChange={setSeverityFilter}>
+          <SelectTrigger className="h-8 w-36 text-xs" data-testid="filter-severity">
+            <SelectValue placeholder="Severity" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Severities</SelectItem>
+            <SelectItem value="critical">Critical</SelectItem>
+            <SelectItem value="serious">Serious</SelectItem>
+            <SelectItem value="moderate">Moderate</SelectItem>
+            <SelectItem value="minor">Minor</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-8 w-36 text-xs" data-testid="filter-status">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="open">Open</SelectItem>
+            <SelectItem value="in-progress">In Progress</SelectItem>
+            <SelectItem value="resolved">Resolved</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} issue{filtered.length !== 1 ? "s" : ""}</span>
+      </div>
+
+      <Card data-testid="card-issues-table">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[100px]">Severity</TableHead>
+                  <TableHead>WCAG Criterion</TableHead>
+                  <TableHead className="hidden md:table-cell">Affected Element</TableHead>
+                  <TableHead>{hasResults ? "File & Line" : "Page"}</TableHead>
+                  <TableHead className="text-right">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((issue) => (
+                  <TableRow
+                    key={issue.id}
+                    data-testid={`issue-row-${issue.id}`}
+                    className="cursor-pointer hover:bg-muted/40 transition-colors"
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View details for ${issue.id}: ${issue.wcagCriterion}`}
+                    onClick={() => setSelectedIssue(issue)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedIssue(issue); } }}
+                  >
+                    <TableCell className="font-medium">{getSeverityBadge(issue.severity)}</TableCell>
+                    <TableCell className="text-sm">{issue.wcagCriterion}</TableCell>
+                    <TableCell className="hidden md:table-cell text-xs font-mono bg-muted/30 p-1 rounded max-w-xs truncate">
+                      {issue.element}
+                    </TableCell>
+                    <TableCell className="max-w-[180px]">
+                      {hasResults && repoFullName ? (
+                        <div className="flex flex-col gap-0.5">
+                          <a
+                            href={buildGithubFileUrl(repoFullName, issue.filePath, issue.lineNumber)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-xs font-mono text-primary hover:underline truncate"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <FileCode2 className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{issue.filePath}</span>
+                            <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-60" />
+                          </a>
+                          {issue.lineNumber && (
+                            <span className="text-xs text-muted-foreground pl-4">Line {issue.lineNumber}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground truncate">{issue.filePath}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">{getStatusBadge(issue.status)}</TableCell>
+                  </TableRow>
+                ))}
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                      No issues match the current filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Sheet open={!!selectedIssue} onOpenChange={(open) => { if (!open) setSelectedIssue(null); }}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          {selectedIssue && (
+            <>
+              <SheetHeader className="pr-6">
+                <div className="flex items-center gap-2 mb-1">
+                  {getSeverityBadge(selectedIssue.severity)}
+                  <span className="text-xs text-muted-foreground font-mono">{selectedIssue.id}</span>
+                </div>
+                <SheetTitle className="font-serif text-lg leading-snug">
+                  {selectedIssue.wcagCriterion}
+                </SheetTitle>
+                <SheetDescription className="text-sm">
+                  {selectedIssue.description ?? "No description available."}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="mt-6 space-y-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Location</p>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2.5 text-sm font-mono text-muted-foreground">
+                    {selectedIssue.filePath}
+                    {selectedIssue.lineNumber && <span className="ml-2 text-muted-foreground/70">Line {selectedIssue.lineNumber}</span>}
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Affected Element</p>
+                  <pre className="rounded-md border bg-muted/40 px-3 py-2.5 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                    {selectedIssue.element}
+                  </pre>
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Status</p>
+                  {getStatusBadge(selectedIssue.status)}
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Suggested Fix</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {getSuggestedFix(selectedIssue.ruleId, selectedIssue.wcagCriterion)}
+                  </p>
+                </div>
+              </div>
+              <SheetClose asChild>
+                <Button variant="outline" size="sm" className="mt-8 w-full gap-2">
+                  <X className="w-3.5 h-3.5" /> Close
+                </Button>
+              </SheetClose>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
 export default function Platform() {
   const [activeRepo, setActiveRepo] = useState<string | null>(null);
   const { data: connectedReposData } = useGetConnectedRepos();
@@ -853,12 +1147,36 @@ export default function Platform() {
 
   return (
     <div className="min-h-screen bg-muted/20 py-8 px-4" data-testid="page-platform">
-      <div className="container mx-auto max-w-7xl space-y-8">
+      <div className="container mx-auto max-w-7xl space-y-6">
+        <div>
+          <h1 className="text-2xl font-serif font-bold tracking-tight text-primary">Audit Workspace</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage audits, review issues, and generate compliance reports.</p>
+        </div>
+
         <GitHubConnectCard
           activeRepo={resolvedActiveRepo}
           onSelectRepo={setActiveRepo}
         />
-        <LiveDashboard repoFullName={resolvedActiveRepo} />
+
+        <Tabs defaultValue="overview" className="space-y-4" data-testid="platform-tabs">
+          <TabsList className="h-9">
+            <TabsTrigger value="overview" data-testid="tab-trigger-overview">Overview</TabsTrigger>
+            <TabsTrigger value="issues" data-testid="tab-trigger-issues">Issues</TabsTrigger>
+            <TabsTrigger value="reports" data-testid="tab-trigger-reports">Reports</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" data-testid="tab-content-overview">
+            <LiveDashboard repoFullName={resolvedActiveRepo} />
+          </TabsContent>
+
+          <TabsContent value="issues" data-testid="tab-content-issues">
+            <IssuesTab repoFullName={resolvedActiveRepo} />
+          </TabsContent>
+
+          <TabsContent value="reports" data-testid="tab-content-reports">
+            <ReportsTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
