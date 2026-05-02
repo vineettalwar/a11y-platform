@@ -429,7 +429,7 @@ const WCAG_RULES: WcagRule[] = [
   },
   {
     id: "invalid-aria-role",
-    pattern: /role\s*=\s*["'](?!alert|alertdialog|application|article|banner|button|cell|checkbox|columnheader|combobox|complementary|contentinfo|definition|dialog|directory|document|feed|figure|form|grid|gridcell|group|heading|img|link|list|listbox|listitem|log|main|marquee|math|menu|menubar|menuitem|menuitemcheckbox|menuitemradio|navigation|none|note|option|presentation|progressbar|radio|radiogroup|region|row|rowgroup|rowheader|scrollbar|search|searchbox|separator|slider|spinbutton|status|switch|tab|table|tablist|tabpanel|term|textbox|timer|toolbar|tooltip|tree|treegrid|treeitem)([^"']+)["']/gi,
+    pattern: /role\s*=\s*["'](?!(alert|alertdialog|application|article|banner|button|cell|checkbox|columnheader|combobox|complementary|contentinfo|definition|dialog|directory|document|feed|figure|form|grid|gridcell|group|heading|img|link|list|listbox|listitem|log|main|marquee|math|menu|menubar|menuitem|menuitemcheckbox|menuitemradio|navigation|none|note|option|presentation|progressbar|radio|radiogroup|region|row|rowgroup|rowheader|scrollbar|search|searchbox|separator|slider|spinbutton|status|switch|tab|table|tablist|tabpanel|term|textbox|timer|toolbar|tooltip|tree|treegrid|treeitem)["'])([^"']+)["']/gi,
     severity: "serious",
     description: "Invalid ARIA role value — role does not match any allowed WAI-ARIA role",
     wcagCriterion: "4.1.2 Name, Role, Value",
@@ -779,7 +779,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
         scannedAt: new Date().toISOString(),
       },
       issues: allFindings.map((f, i) => ({
-        id: insertedIds[i] ?? i + 1,
+        id: String(insertedIds[i] ?? i + 1),
         filePath: f.filePath,
         lineNumber: f.lineNumber,
         ruleId: f.ruleId,
@@ -960,7 +960,7 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
         scannedAt: new Date().toISOString(),
       },
       issues: allFindings.map((f, i) => ({
-        id: streamInsertedIds[i] ?? i + 1,
+        id: String(streamInsertedIds[i] ?? i + 1),
         filePath: f.filePath,
         lineNumber: f.lineNumber,
         ruleId: f.ruleId,
