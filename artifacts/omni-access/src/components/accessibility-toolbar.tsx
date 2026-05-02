@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Type, Sun, ChevronDown } from "lucide-react";
+import { Type, Sun, Moon, ChevronDown } from "lucide-react";
 
 const STORAGE_KEY_FONT_SIZE = "omni-font-size";
 const STORAGE_KEY_CONTRAST = "omni-high-contrast";
+const STORAGE_KEY_DARK = "omni-dark-mode";
 const STORAGE_KEY_DISMISSED = "omni-toolbar-dismissed";
 const FONT_SIZES = ["text-sm-root", "text-base-root", "text-lg-root"] as const;
 type FontSizeClass = typeof FONT_SIZES[number];
@@ -15,6 +16,10 @@ function applyFontSize(cls: FontSizeClass) {
 
 function applyContrast(on: boolean) {
   document.documentElement.classList.toggle("high-contrast", on);
+}
+
+function applyDarkMode(on: boolean) {
+  document.documentElement.classList.toggle("dark", on);
 }
 
 interface AccessibilityToolbarProps {
@@ -30,6 +35,10 @@ export default function AccessibilityToolbar({ onDismissedChange }: Accessibilit
     if (typeof window === "undefined") return false;
     return localStorage.getItem(STORAGE_KEY_CONTRAST) === "true";
   });
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(STORAGE_KEY_DARK) === "true";
+  });
   const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem(STORAGE_KEY_DISMISSED) === "true";
@@ -38,6 +47,7 @@ export default function AccessibilityToolbar({ onDismissedChange }: Accessibilit
   useEffect(() => {
     applyFontSize(FONT_SIZES[fontIdx]);
     applyContrast(highContrast);
+    applyDarkMode(darkMode);
     if (typeof onDismissedChange === "function") {
       onDismissedChange(dismissed);
     }
@@ -67,6 +77,15 @@ export default function AccessibilityToolbar({ onDismissedChange }: Accessibilit
       const next = !prev;
       applyContrast(next);
       localStorage.setItem(STORAGE_KEY_CONTRAST, String(next));
+      return next;
+    });
+  }, []);
+
+  const toggleDarkMode = useCallback(() => {
+    setDarkMode(prev => {
+      const next = !prev;
+      applyDarkMode(next);
+      localStorage.setItem(STORAGE_KEY_DARK, String(next));
       return next;
     });
   }, []);
@@ -132,6 +151,26 @@ export default function AccessibilityToolbar({ onDismissedChange }: Accessibilit
           >
             <Sun className="h-3 w-3" aria-hidden="true" />
             <span className="hidden sm:inline">High Contrast</span>
+          </button>
+
+          <div className="w-px h-4 bg-border mx-1" aria-hidden="true" />
+
+          <button
+            onClick={toggleDarkMode}
+            aria-pressed={darkMode}
+            aria-label={darkMode ? "Disable dark mode" : "Enable dark mode"}
+            className={`flex items-center gap-1.5 h-7 px-2.5 rounded text-xs font-medium transition-colors ${
+              darkMode
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-primary/10"
+            }`}
+          >
+            {darkMode ? (
+              <Sun className="h-3 w-3" aria-hidden="true" />
+            ) : (
+              <Moon className="h-3 w-3" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">Dark Mode</span>
           </button>
         </div>
 
