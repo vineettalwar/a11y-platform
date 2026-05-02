@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..900&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -123,7 +123,7 @@
   --chart-4: 20 60% 50%;
   --chart-5: 200 40% 40%;
 
-  --app-font-sans: 'Plus Jakarta Sans', sans-serif;
+  --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: 'Fraunces', serif;
   --app-font-mono: Menlo, monospace;
   
@@ -204,15 +204,42 @@
   --chart-5: 200 40% 40%;
 }
 
+/* Font-size scale overrides applied to <html> by AccessibilityToolbar */
+html.text-sm-root { font-size: 14px; }
+html.text-lg-root { font-size: 18px; }
+
+/* High-contrast mode: WCAG AAA overrides applied to <html> */
+html.high-contrast {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --border: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --card-border: 0 0% 0%;
+  --primary: 165 100% 15%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 0 0% 92%;
+  --muted-foreground: 0 0% 10%;
+  --accent: 150 100% 25%;
+  --accent-foreground: 0 0% 100%;
+  --secondary: 0 0% 90%;
+  --secondary-foreground: 0 0% 0%;
+  --input: 0 0% 85%;
+  --ring: 165 100% 15%;
+}
+
 @layer base {
   * {
     @apply border-border;
   }
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    line-height: 1.6;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
   }
 }
 

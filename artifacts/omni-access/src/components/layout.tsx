@@ -2,12 +2,14 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Shield } from "lucide-react";
 import ChatWidget from "./chat-widget";
+import AccessibilityToolbar from "./accessibility-toolbar";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground font-sans">
+      <AccessibilityToolbar />
       <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" data-testid="link-home">
@@ -39,7 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {children}
       </main>
 
