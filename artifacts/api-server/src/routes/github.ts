@@ -832,4 +832,105 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/github/dashboard", async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated()) {
+      res.json({ repos: [], stats: { totalProperties: 0, openIssues: 0, avgScore: 0 } });
+      return;
+    }
+
+    const userId = req.user.id;
+
+    const repos = await db
+      .select()
+      .from(connectedRepos)
+      .where(eq(connectedRepos.userId, userId))
+      .orderBy(desc(connectedRepos.createdAt));
+
+    const allScanResults = await db
+      .select()
+      .from(scanResults)
+      .where(eq(scanResults.userId, userId))
+      .orderBy(desc(scanResults.createdAt));
+
+    const resultsByRepo = new Map<string, typeof allScanResults>();
+    for (const r of allScanResults) {
+      if (!resultsByRepo.has(r.repoFullName)) resultsByRepo.set(r.repoFullName, []);
+      resultsByRepo.get(r.repoFullName)!.push(r);
+    }
+
+    const repoSummaries = repos.map((repo) => {
+      const results = resultsByRepo.get(repo.repoFullName) ?? [];
+      const criticalIssues = results.filter((r) => r.severity === "critical").length;
+      const totalIssues = results.length;
+      const score = results.length === 0
+        ? null
+        : Math.max(0, Math.round(100 - Math.min(totalIssues * 2, 100)));
+
+      let status: string;
+      if (score === null) {
+        status = "never-scanned";
+      } else if (criticalIssues >= 5) {
+        status = "critical";
+      } else if (criticalIssues > 0) {
+        status = "needs-attention";
+      } else {
+        status = "good";
+      }
+
+      return {
+        id: String(repo.id),
+        repoFullName: repo.repoFullName,
+        repoName: repo.repoName,
+        repoOwner: repo.repoOwner,
+        lastScannedAt: repo.lastScannedAt?.toISOString() ?? null,
+        criticalIssues,
+        totalIssues,
+        score,
+        status,
+      };
+    });
+
+    const scannedRepos = repoSummaries.filter((r) => r.score !== null);
+    const avgScore = scannedRepos.length
+      ? Math.round(scannedRepos.reduce((a, r) => a + (r.score ?? 0), 0) / scannedRepos.length)
+      : 0;
+
+    const openIssues = allScanResults.length;
+
+    const activityFeed: Array<{ id: string; event: string; time: string; type: string }> = [];
+    for (const repo of repos) {
+      if (repo.lastScannedAt) {
+        activityFeed.push({
+          id: `scan-${repo.id}`,
+          event: `Scan completed for ${repo.repoFullName}`,
+          time: repo.lastScannedAt.toISOString(),
+          type: "scan",
+        });
+      }
+      activityFeed.push({
+        id: `connect-${repo.id}`,
+        event: `${repo.repoFullName} connected`,
+        time: repo.createdAt.toISOString(),
+        type: "connect",
+      });
+    }
+
+    activityFeed.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+    res.json({
+      repos: repoSummaries,
+      stats: {
+        totalProperties: repos.length,
+        openIssues,
+        avgScore,
+      },
+      activityFeed: activityFeed.slice(0, 10),
+    });
+  } catch (err: unknown) {
+    console.error("Dashboard error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
