@@ -1,5 +1,6 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import path from "path";
+import { fileURLToPath } from "url";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { db, pool } from "@workspace/db";
@@ -18,7 +19,8 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const migrationsFolder = path.resolve(process.cwd(), "../../lib/db/migrations");
+const _dirname = path.dirname(fileURLToPath(import.meta.url));
+const migrationsFolder = path.resolve(_dirname, "../../../lib/db/migrations");
 
 async function main() {
   logger.info({ migrationsFolder }, "Running database migrations...");
