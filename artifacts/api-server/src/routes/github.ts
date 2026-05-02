@@ -436,8 +436,8 @@ function analyzeFileContent(content: string): Finding[] {
   return findings;
 }
 
-const SCANNABLE_EXTENSIONS = [".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte", ".css"];
-const MAX_FILES = 50;
+const SCANNABLE_EXTENSIONS = [".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte", ".css", ".ts", ".js"];
+const DEFAULT_MAX_FILES = 200;
 
 router.post("/github/scan", async (req: Request, res: Response) => {
   try {
@@ -459,7 +459,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
       return;
     }
 
-    const { repoFullName } = req.body as { repoFullName?: unknown };
+    const { repoFullName, maxFiles } = req.body as { repoFullName?: unknown; maxFiles?: unknown };
     if (!repoFullName || typeof repoFullName !== "string") {
       res.status(400).json({ error: "repoFullName is required" });
       return;
@@ -469,6 +469,8 @@ router.post("/github/scan", async (req: Request, res: Response) => {
       res.status(400).json({ error: "repoFullName must be in owner/repo format" });
       return;
     }
+
+    const fileLimit = typeof maxFiles === "number" && maxFiles > 0 ? Math.min(maxFiles, 1000) : DEFAULT_MAX_FILES;
 
     const [owner, repoName] = scanParts;
     const scanId = crypto.randomUUID();
@@ -488,7 +490,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
           f.type === "blob" &&
           SCANNABLE_EXTENSIONS.some((ext) => f.path.toLowerCase().endsWith(ext)),
       )
-      .slice(0, MAX_FILES);
+      .slice(0, fileLimit);
 
     const allFindings: Array<Finding & { filePath: string }> = [];
 
@@ -583,6 +585,184 @@ router.post("/github/scan", async (req: Request, res: Response) => {
     const message = err instanceof Error ? err.message : "Internal server error";
     console.error("Scan error:", err);
     res.status(500).json({ error: message });
+  }
+});
+
+router.get("/github/scan-stream", async (req: Request, res: Response) => {
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  try {
+    if (!req.isAuthenticated()) {
+      send("error", { message: "Not authenticated" });
+      res.end();
+      return;
+    }
+
+    const userId = req.user.id;
+
+    const [conn] = await db
+      .select()
+      .from(githubConnections)
+      .where(eq(githubConnections.userId, userId))
+      .limit(1);
+
+    if (!conn) {
+      send("error", { message: "Not connected to GitHub" });
+      res.end();
+      return;
+    }
+
+    const repoFullName = req.query["repoFullName"];
+    const maxFilesParam = req.query["maxFiles"];
+
+    if (!repoFullName || typeof repoFullName !== "string") {
+      send("error", { message: "repoFullName is required" });
+      res.end();
+      return;
+    }
+
+    const scanParts = repoFullName.split("/");
+    if (scanParts.length !== 2 || !scanParts[0] || !scanParts[1]) {
+      send("error", { message: "repoFullName must be in owner/repo format" });
+      res.end();
+      return;
+    }
+
+    const fileLimit = maxFilesParam ? Math.min(Math.max(1, parseInt(maxFilesParam as string, 10) || DEFAULT_MAX_FILES), 1000) : DEFAULT_MAX_FILES;
+
+    const [owner, repoName] = scanParts;
+    const scanId = crypto.randomUUID();
+
+    const repoInfo = await fetchGitHub<{ default_branch: string }>(
+      `/repos/${owner}/${repoName}`,
+      conn.accessToken,
+    );
+    const treeResp = await fetchGitHub<GitHubTreeResponse>(
+      `/repos/${owner}/${repoName}/git/trees/${repoInfo.default_branch}?recursive=1`,
+      conn.accessToken,
+    );
+
+    const filesToScan = treeResp.tree
+      .filter(
+        (f) =>
+          f.type === "blob" &&
+          SCANNABLE_EXTENSIONS.some((ext) => f.path.toLowerCase().endsWith(ext)),
+      )
+      .slice(0, fileLimit);
+
+    send("start", { total: filesToScan.length });
+
+    const allFindings: Array<Finding & { filePath: string }> = [];
+
+    for (let i = 0; i < filesToScan.length; i++) {
+      const file = filesToScan[i];
+      if (!file) continue;
+
+      send("progress", {
+        current: i + 1,
+        total: filesToScan.length,
+        filePath: file.path,
+      });
+
+      try {
+        const fileData = await fetchGitHub<GitHubFileResponse>(
+          `/repos/${owner}/${repoName}/contents/${file.path}`,
+          conn.accessToken,
+        );
+        if (fileData.encoding === "base64" && fileData.content) {
+          const content = Buffer.from(
+            fileData.content.replace(/\n/g, ""),
+            "base64",
+          ).toString("utf-8");
+          const findings = analyzeFileContent(content);
+          for (const f of findings) {
+            allFindings.push({ filePath: file.path, ...f });
+          }
+        }
+      } catch {
+        // Skip individual files that cannot be fetched
+      }
+    }
+
+    await db
+      .delete(scanResults)
+      .where(
+        and(
+          eq(scanResults.userId, userId),
+          eq(scanResults.repoFullName, repoFullName),
+        ),
+      );
+
+    if (allFindings.length > 0) {
+      await db.insert(scanResults).values(
+        allFindings.map((f) => ({
+          userId,
+          repoFullName,
+          scanId,
+          filePath: f.filePath,
+          lineNumber: f.lineNumber,
+          ruleId: f.ruleId,
+          severity: f.severity,
+          description: f.description,
+          element: f.element,
+          wcagCriterion: f.wcagCriterion,
+        })),
+      );
+    }
+
+    await db
+      .update(connectedRepos)
+      .set({ lastScannedAt: new Date() })
+      .where(
+        and(
+          eq(connectedRepos.userId, userId),
+          eq(connectedRepos.repoFullName, repoFullName),
+        ),
+      );
+
+    const counts: Record<Severity, number> = { critical: 0, serious: 0, moderate: 0, minor: 0 };
+    for (const f of allFindings) counts[f.severity]++;
+
+    const totalIssues = allFindings.length;
+    const maxPossible = filesToScan.length * 5;
+    const score = Math.max(
+      0,
+      Math.round(100 - (totalIssues / Math.max(maxPossible, 1)) * 100),
+    );
+
+    send("complete", {
+      repoFullName,
+      summary: {
+        score,
+        totalIssues,
+        ...counts,
+        filesScanned: filesToScan.length,
+        scannedAt: new Date().toISOString(),
+      },
+      issues: allFindings.map((f, i) => ({
+        id: `ISS-${String(i + 1).padStart(2, "0")}`,
+        filePath: f.filePath,
+        lineNumber: f.lineNumber,
+        ruleId: f.ruleId,
+        severity: f.severity,
+        description: f.description,
+        element: f.element,
+        wcagCriterion: f.wcagCriterion,
+      })),
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("Scan stream error:", err);
+    send("error", { message });
+  } finally {
+    res.end();
   }
 });
 

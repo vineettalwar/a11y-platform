@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -17,12 +17,17 @@ import {
   useListGithubRepos,
   useGetConnectedRepos,
   useConnectRepo,
-  useScanRepo,
   useGetScanResults,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetGithubStatusQueryKey, getGetConnectedReposQueryKey, getGetScanResultsQueryKey, type GetScanResultsParams } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
+
+interface ScanProgress {
+  current: number;
+  total: number;
+  filePath: string;
+}
 
 interface Issue {
   id: string;
@@ -77,6 +82,10 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
   const [showInput, setShowInput] = useState(false);
   const [repoSearch, setRepoSearch] = useState("");
   const [showRepoDropdown, setShowRepoDropdown] = useState(false);
+  const [scanningRepo, setScanningRepo] = useState<string | null>(null);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const esRef = useRef<EventSource | null>(null);
 
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
   const { data: status, isLoading: statusLoading } = useGetGithubStatus({ query: { enabled: isAuthenticated } });
@@ -85,7 +94,6 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
   const { data: reposData, isLoading: reposLoading } = useListGithubRepos({ query: { enabled: status?.connected === true } });
   const { data: connectedReposData, refetch: refetchConnectedRepos } = useGetConnectedRepos();
   const connectRepoMutation = useConnectRepo();
-  const scanMutation = useScanRepo();
 
   const handleConnect = async () => {
     if (!pat.trim()) return;
@@ -112,12 +120,60 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
     refetchConnectedRepos();
   };
 
-  const handleScan = async (repoFullName: string) => {
+  const handleScan = useCallback((repoFullName: string) => {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
     onSelectRepo(repoFullName);
-    await scanMutation.mutateAsync({ data: { repoFullName } });
-    queryClient.invalidateQueries({ queryKey: getGetScanResultsQueryKey({ repoFullName } as GetScanResultsParams) });
-    refetchConnectedRepos();
-  };
+    setScanningRepo(repoFullName);
+    setScanProgress(null);
+    setScanError(null);
+
+    const url = `/api/github/scan-stream?repoFullName=${encodeURIComponent(repoFullName)}`;
+    const es = new EventSource(url, { withCredentials: true });
+    esRef.current = es;
+
+    es.addEventListener("start", () => {
+      setScanProgress({ current: 0, total: 0, filePath: "" });
+    });
+
+    es.addEventListener("progress", (e: MessageEvent) => {
+      const data = JSON.parse(e.data) as { current: number; total: number; filePath: string };
+      setScanProgress(data);
+    });
+
+    es.addEventListener("complete", (e: MessageEvent) => {
+      JSON.parse(e.data);
+      es.close();
+      esRef.current = null;
+      setScanningRepo(null);
+      setScanProgress(null);
+      queryClient.invalidateQueries({ queryKey: getGetScanResultsQueryKey({ repoFullName } as GetScanResultsParams) });
+      refetchConnectedRepos();
+    });
+
+    es.addEventListener("error", (e: MessageEvent) => {
+      let msg = "Scan failed";
+      try {
+        const data = JSON.parse(e.data) as { message?: string };
+        if (data.message) msg = data.message;
+      } catch { /* noop */ }
+      es.close();
+      esRef.current = null;
+      setScanningRepo(null);
+      setScanProgress(null);
+      setScanError(msg);
+    });
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        esRef.current = null;
+        setScanningRepo(null);
+        setScanProgress(null);
+      }
+    };
+  }, [onSelectRepo, queryClient, refetchConnectedRepos]);
 
   const filteredRepos = reposData?.repos?.filter((r) =>
     r.fullName.toLowerCase().includes(repoSearch.toLowerCase())
@@ -286,56 +342,85 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
           </div>
         </div>
 
+        {scanError && (
+          <Alert variant="destructive" className="py-2">
+            <AlertDescription className="text-xs flex items-center justify-between gap-2">
+              <span>{scanError}</span>
+              <button className="shrink-0" onClick={() => setScanError(null)}><X className="w-3 h-3" /></button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {connectedRepos.length > 0 && (
           <div className="space-y-2">
             <Label>Connected Repositories</Label>
             <div className="space-y-2">
               {connectedRepos.map((repo) => {
                 const isActive = activeRepo === repo.repoFullName;
-                const isScanning = scanMutation.isPending && scanMutation.variables?.data?.repoFullName === repo.repoFullName;
+                const isScanning = scanningRepo === repo.repoFullName;
+                const progress = isScanning ? scanProgress : null;
+                const progressPct = progress && progress.total > 0
+                  ? Math.round((progress.current / progress.total) * 100)
+                  : 0;
                 return (
                   <div
                     key={repo.id}
-                    className={`flex items-center justify-between gap-3 border rounded-md px-3 py-2 text-sm transition-colors ${isActive ? "bg-primary/5 border-primary/30" : "bg-muted/20"}`}
+                    className={`border rounded-md px-3 py-2 text-sm transition-colors ${isActive ? "bg-primary/5 border-primary/30" : "bg-muted/20"}`}
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium truncate">{repo.repoFullName}</p>
-                        {isActive && <Badge variant="outline" className="text-xs text-primary border-primary/40 bg-primary/5 shrink-0">Viewing</Badge>}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{repo.repoFullName}</p>
+                          {isActive && <Badge variant="outline" className="text-xs text-primary border-primary/40 bg-primary/5 shrink-0">Viewing</Badge>}
+                        </div>
+                        {isScanning ? (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {progress && progress.total > 0
+                              ? `Scanning file ${progress.current} of ${progress.total}…`
+                              : "Preparing scan…"}
+                          </p>
+                        ) : repo.lastScannedAt ? (
+                          <p className="text-xs text-muted-foreground">
+                            Last scanned: {new Date(repo.lastScannedAt).toLocaleString()}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Never scanned</p>
+                        )}
                       </div>
-                      {repo.lastScannedAt ? (
-                        <p className="text-xs text-muted-foreground">
-                          Last scanned: {new Date(repo.lastScannedAt).toLocaleString()}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">Never scanned</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {!isActive && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!isActive && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1 text-muted-foreground"
+                            onClick={() => onSelectRepo(repo.repoFullName)}
+                          >
+                            View
+                          </Button>
+                        )}
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="gap-1 text-muted-foreground"
-                          onClick={() => onSelectRepo(repo.repoFullName)}
+                          variant="outline"
+                          className="gap-1"
+                          disabled={isScanning || !!scanningRepo}
+                          onClick={() => handleScan(repo.repoFullName)}
                         >
-                          View
+                          {isScanning ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> Scanning…</>
+                          ) : (
+                            <><RefreshCw className="w-3 h-3" /> Scan Now</>
+                          )}
                         </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1"
-                        disabled={isScanning}
-                        onClick={() => handleScan(repo.repoFullName)}
-                      >
-                        {isScanning ? (
-                          <><Loader2 className="w-3 h-3 animate-spin" /> Scanning…</>
-                        ) : (
-                          <><RefreshCw className="w-3 h-3" /> Scan Now</>
-                        )}
-                      </Button>
+                      </div>
                     </div>
+                    {isScanning && progress && progress.total > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <Progress value={progressPct} className="h-1.5" />
+                        <p className="text-xs text-muted-foreground truncate" title={progress.filePath}>
+                          {progress.filePath}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 );
               })}

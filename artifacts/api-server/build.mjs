@@ -96,6 +96,7 @@ async function buildAll() {
       "wrangler",
       "zeromq",
       "zeromq-prebuilt",
+      "openid-client",
       "playwright",
       "puppeteer",
       "puppeteer-core",
