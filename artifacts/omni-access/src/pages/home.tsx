@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +94,7 @@ const avgScore = Math.round(MOCK_PROPERTIES.reduce((a, p) => a + p.score, 0) / M
 const totalCritical = MOCK_PROPERTIES.reduce((a, p) => a + p.criticalIssues, 0);
 
 export default function Home() {
+  const [, navigate] = useLocation();
   return (
     <div className="bg-muted/20 min-h-screen" data-testid="page-dashboard">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -119,7 +120,7 @@ export default function Home() {
                 Start Audit
               </Link>
             </Button>
-            <Button size="sm" variant="outline" data-testid="btn-add-property">
+            <Button size="sm" variant="outline" data-testid="btn-add-property" onClick={() => navigate("/platform?connect=true")}>
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               Add Property
             </Button>
@@ -196,7 +197,16 @@ export default function Home() {
                 </TableHeader>
                 <TableBody>
                   {MOCK_PROPERTIES.map((p) => (
-                    <TableRow key={p.id} data-testid={`property-row-${p.id}`}>
+                    <TableRow
+                      key={p.id}
+                      data-testid={`property-row-${p.id}`}
+                      className="cursor-pointer hover:bg-muted/40 transition-colors"
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Open audit workspace for ${p.name}`}
+                      onClick={() => navigate(`/platform?repo=${encodeURIComponent(p.name)}`)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(`/platform?repo=${encodeURIComponent(p.name)}`); } }}
+                    >
                       <TableCell>
                         <div>
                           <p className="font-medium text-sm flex items-center gap-1.5">

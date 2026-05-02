@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -77,9 +78,10 @@ const getStatusBadge = (status: string) => {
 interface GitHubConnectCardProps {
   activeRepo: string | null;
   onSelectRepo: (repo: string) => void;
+  autoOpenConnect?: boolean;
 }
 
-function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps) {
+function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHubConnectCardProps) {
   const queryClient = useQueryClient();
   const [pat, setPat] = useState("");
   const [showInput, setShowInput] = useState(false);
@@ -92,6 +94,16 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
 
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
   const { data: status, isLoading: statusLoading } = useGetGithubStatus({ query: { enabled: isAuthenticated } });
+
+  useEffect(() => {
+    if (autoOpenConnect && !statusLoading) {
+      if (status?.connected) {
+        setShowRepoDropdown(true);
+      } else if (status?.connected === false) {
+        setShowInput(true);
+      }
+    }
+  }, [autoOpenConnect, status?.connected, statusLoading]);
   const connectMutation = useConnectGithub();
   const disconnectMutation = useDisconnectGithub();
   const { data: reposData, isLoading: reposLoading } = useListGithubRepos({ query: { enabled: status?.connected === true } });
@@ -1138,9 +1150,20 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
 }
 
 export default function Platform() {
-  const [activeRepo, setActiveRepo] = useState<string | null>(null);
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const repoParam = params.get("repo");
+  const connectParam = params.get("connect") === "true";
+
+  const [activeRepo, setActiveRepo] = useState<string | null>(repoParam);
   const { data: connectedReposData } = useGetConnectedRepos();
   const connectedRepos = connectedReposData?.repos ?? [];
+
+  useEffect(() => {
+    if (repoParam) {
+      setActiveRepo(repoParam);
+    }
+  }, [repoParam]);
 
   const resolvedActiveRepo =
     activeRepo ?? connectedRepos[0]?.repoFullName ?? null;
@@ -1156,6 +1179,7 @@ export default function Platform() {
         <GitHubConnectCard
           activeRepo={resolvedActiveRepo}
           onSelectRepo={setActiveRepo}
+          autoOpenConnect={connectParam}
         />
 
         <Tabs defaultValue="overview" className="space-y-4" data-testid="platform-tabs">
