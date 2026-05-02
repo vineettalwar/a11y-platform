@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search, ExternalLink, FileCode2, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 import {
   useGetGithubStatus,
   useConnectGithub,
@@ -21,15 +23,27 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetGithubStatusQueryKey, getGetConnectedReposQueryKey, getGetScanResultsQueryKey, type GetScanResultsParams } from "@workspace/api-client-react";
 
-const STATIC_ISSUES = [
-  { id: "ISS-01", severity: "critical", wcagCriterion: "1.1.1 Non-text Content", element: "<img src='hero.jpg'>", filePath: "/checkout", status: "open" },
-  { id: "ISS-02", severity: "critical", wcagCriterion: "2.1.1 Keyboard", element: "<div onClick={submit}>", filePath: "/cart", status: "open" },
-  { id: "ISS-03", severity: "critical", wcagCriterion: "1.4.3 Contrast (Minimum)", element: "<span class='text-gray-400'>", filePath: "/login", status: "in-progress" },
-  { id: "ISS-04", severity: "serious", wcagCriterion: "4.1.2 Name, Role, Value", element: "<button class='btn'>", filePath: "/profile", status: "open" },
-  { id: "ISS-05", severity: "serious", wcagCriterion: "1.3.1 Info and Relationships", element: "<table> (no th)", filePath: "/dashboard", status: "in-progress" },
-  { id: "ISS-06", severity: "serious", wcagCriterion: "2.4.7 Focus Visible", element: "input:focus { outline: none }", filePath: "Global", status: "resolved" },
-  { id: "ISS-07", severity: "moderate", wcagCriterion: "2.4.4 Link Purpose", element: "<a href='/#'>Click here</a>", filePath: "/blog", status: "open" },
-  { id: "ISS-08", severity: "minor", wcagCriterion: "1.4.4 Resize text", element: "meta viewport maximum-scale=1", filePath: "Global", status: "resolved" },
+interface Issue {
+  id: string;
+  severity: string;
+  wcagCriterion: string;
+  element: string;
+  filePath: string;
+  lineNumber?: number;
+  description?: string;
+  ruleId?: string;
+  status: string;
+}
+
+const STATIC_ISSUES: Issue[] = [
+  { id: "ISS-01", severity: "critical", wcagCriterion: "1.1.1 Non-text Content", element: "<img src='hero.jpg'>", filePath: "/checkout", description: "Image missing alt attribute", status: "open" },
+  { id: "ISS-02", severity: "critical", wcagCriterion: "2.1.1 Keyboard", element: "<div onClick={submit}>", filePath: "/cart", description: "Interactive div using onClick without keyboard support — use a button or add onKeyDown", status: "open" },
+  { id: "ISS-03", severity: "critical", wcagCriterion: "1.4.3 Contrast (Minimum)", element: "<span class='text-gray-400'>", filePath: "/login", description: "Text colour does not meet minimum contrast ratio against its background", status: "in-progress" },
+  { id: "ISS-04", severity: "serious", wcagCriterion: "4.1.2 Name, Role, Value", element: "<button class='btn'>", filePath: "/profile", description: "Button has no text content or accessible label", status: "open" },
+  { id: "ISS-05", severity: "serious", wcagCriterion: "1.3.1 Info and Relationships", element: "<table> (no th)", filePath: "/dashboard", description: "Table without header cells — screen readers cannot associate data cells", status: "in-progress" },
+  { id: "ISS-06", severity: "serious", wcagCriterion: "2.4.7 Focus Visible", element: "input:focus { outline: none }", filePath: "Global", description: "Focus outline removed — keyboard users lose focus visibility", status: "resolved" },
+  { id: "ISS-07", severity: "moderate", wcagCriterion: "2.4.4 Link Purpose", element: "<a href='/#'>Click here</a>", filePath: "/blog", description: "Non-descriptive link text — screen reader users cannot determine link purpose", status: "open" },
+  { id: "ISS-08", severity: "minor", wcagCriterion: "1.4.4 Resize text", element: "meta viewport maximum-scale=1", filePath: "Global", description: "Viewport meta restricts zooming — users with low vision cannot enlarge text", status: "resolved" },
 ];
 
 const getSeverityBadge = (severity: string) => {
@@ -309,8 +323,43 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
   );
 }
 
+function buildGithubFileUrl(repoFullName: string, filePath: string, lineNumber?: number): string {
+  const base = `https://github.com/${repoFullName}/blob/HEAD/${filePath}`;
+  return lineNumber ? `${base}#L${lineNumber}` : base;
+}
+
+const SUGGESTED_FIXES: Record<string, string> = {
+  "missing-alt": "Add a descriptive alt attribute to the <img> element. For decorative images use alt=\"\".",
+  "empty-alt": "If the image conveys meaning, add a descriptive alt value. If it is purely decorative, keep alt=\"\" and confirm it is correct.",
+  "missing-form-label": "Associate a <label> element using a matching for/id pair, or add aria-label / aria-labelledby to the input.",
+  "empty-button": "Add visible text content or an aria-label attribute to the button so assistive technologies can announce its purpose.",
+  "empty-link": "Add descriptive text inside the <a> element, or use aria-label to describe the link destination.",
+  "missing-lang": "Add a lang attribute to the <html> element (e.g. lang=\"en\") so screen readers use the correct pronunciation rules.",
+  "onclick-no-keyboard": "Replace the <div> with a <button> element, or add role=\"button\", tabIndex={0}, and an onKeyDown handler for Enter/Space.",
+  "outline-none": "Remove outline: none / outline: 0 from focus styles. Use a visible custom focus indicator instead, such as outline: 2px solid currentColor.",
+  "autoplay-media": "Remove the autoplay attribute, or provide a mechanism to pause, stop, or mute the media before it starts.",
+  "table-no-headers": "Add <th> elements to identify column or row headers, and use scope attributes to associate them with data cells.",
+  "generic-link-text": "Replace vague link text (\"click here\", \"read more\") with a description of the link's destination or purpose.",
+  "missing-input-type": "Add an explicit type attribute (e.g. type=\"text\", type=\"email\") to improve keyboard behaviour and autofill hints.",
+  "max-scale-restriction": "Remove maximum-scale=1 and user-scalable=no from the viewport meta tag to allow users to zoom.",
+  "missing-button-type": "Add type=\"button\" (or type=\"submit\" / type=\"reset\") to prevent unintended form submissions.",
+};
+
+function getSuggestedFix(ruleId?: string, wcagCriterion?: string): string {
+  if (ruleId && SUGGESTED_FIXES[ruleId]) return SUGGESTED_FIXES[ruleId];
+  if (wcagCriterion?.startsWith("1.1.1")) return SUGGESTED_FIXES["missing-alt"];
+  if (wcagCriterion?.startsWith("2.1.1")) return SUGGESTED_FIXES["onclick-no-keyboard"];
+  if (wcagCriterion?.startsWith("2.4.7")) return SUGGESTED_FIXES["outline-none"];
+  if (wcagCriterion?.startsWith("4.1.2")) return SUGGESTED_FIXES["empty-button"];
+  if (wcagCriterion?.startsWith("1.3.1")) return SUGGESTED_FIXES["table-no-headers"];
+  if (wcagCriterion?.startsWith("2.4.4")) return SUGGESTED_FIXES["generic-link-text"];
+  if (wcagCriterion?.startsWith("1.4.4")) return SUGGESTED_FIXES["max-scale-restriction"];
+  return "Review the WCAG success criterion and update the element to meet the required accessibility standard.";
+}
+
 function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
   const isLive = !!repoFullName;
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
 
   const { data: scanData, isLoading } = useGetScanResults(
     { repoFullName: repoFullName ?? "" },
@@ -319,13 +368,16 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
 
   const hasResults = isLive && scanData?.summary && scanData.summary.totalIssues >= 0 && scanData.issues.length > 0;
   const complianceScore = hasResults ? scanData!.summary!.score : 74;
-  const issues = hasResults
+  const issues: Issue[] = hasResults
     ? scanData!.issues.map((issue) => ({
         id: issue.id,
         severity: issue.severity,
         wcagCriterion: issue.wcagCriterion ?? issue.ruleId,
         element: issue.element ?? issue.ruleId,
         filePath: issue.filePath,
+        lineNumber: issue.lineNumber ?? undefined,
+        description: issue.description,
+        ruleId: issue.ruleId,
         status: "open",
       }))
     : STATIC_ISSUES;
@@ -526,8 +578,8 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
           <CardTitle className="font-serif">Active Issue Backlog</CardTitle>
           <CardDescription>
             {hasResults
-              ? `${issues.length} violations found in ${repoFullName}`
-              : "Prioritized list of identified WCAG violations requiring engineering remediation"}
+              ? `${issues.length} violations found in ${repoFullName} — click a row for details`
+              : "Prioritized list of identified WCAG violations requiring engineering remediation — click a row for details"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -538,20 +590,49 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
                   <TableHead className="w-[100px]">Severity</TableHead>
                   <TableHead>WCAG Criterion</TableHead>
                   <TableHead className="hidden md:table-cell">Affected Element</TableHead>
-                  <TableHead>{hasResults ? "File" : "Page"}</TableHead>
+                  <TableHead>{hasResults ? "File & Line" : "Page"}</TableHead>
                   <TableHead className="text-right">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {issues.map((issue) => (
-                  <TableRow key={issue.id} data-testid={`issue-row-${issue.id}`}>
+                  <TableRow
+                    key={issue.id}
+                    data-testid={`issue-row-${issue.id}`}
+                    className="cursor-pointer hover:bg-muted/40 transition-colors"
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`View details for ${issue.id}: ${issue.wcagCriterion}`}
+                    onClick={() => setSelectedIssue(issue)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedIssue(issue); } }}
+                  >
                     <TableCell className="font-medium">{getSeverityBadge(issue.severity)}</TableCell>
                     <TableCell className="text-sm">{issue.wcagCriterion}</TableCell>
                     <TableCell className="hidden md:table-cell text-xs font-mono bg-muted/30 p-1 rounded max-w-xs truncate">
                       {issue.element}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground truncate max-w-[140px]">
-                      {issue.filePath}
+                    <TableCell className="max-w-[180px]">
+                      {hasResults && repoFullName ? (
+                        <div className="flex flex-col gap-0.5">
+                          <a
+                            href={buildGithubFileUrl(repoFullName, issue.filePath, issue.lineNumber)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-xs font-mono text-primary hover:underline truncate"
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid={`file-link-${issue.id}`}
+                          >
+                            <FileCode2 className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{issue.filePath}</span>
+                            <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-60" />
+                          </a>
+                          {issue.lineNumber && (
+                            <span className="text-xs text-muted-foreground pl-4">Line {issue.lineNumber}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground truncate">{issue.filePath}</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">{getStatusBadge(issue.status)}</TableCell>
                   </TableRow>
@@ -561,6 +642,94 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
           </div>
         </CardContent>
       </Card>
+
+      <Sheet open={!!selectedIssue} onOpenChange={(open) => { if (!open) setSelectedIssue(null); }}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          {selectedIssue && (
+            <>
+              <SheetHeader className="pr-6">
+                <div className="flex items-center gap-2 mb-1">
+                  {getSeverityBadge(selectedIssue.severity)}
+                  <span className="text-xs text-muted-foreground font-mono">{selectedIssue.id}</span>
+                </div>
+                <SheetTitle className="font-serif text-lg leading-snug">
+                  {selectedIssue.wcagCriterion}
+                </SheetTitle>
+                <SheetDescription className="text-sm">
+                  {selectedIssue.description ?? "No description available."}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="mt-6 space-y-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Location</p>
+                  {hasResults && repoFullName && selectedIssue.lineNumber ? (
+                    <div className="flex flex-col gap-1 rounded-md border bg-muted/30 px-3 py-2.5">
+                      <a
+                        href={buildGithubFileUrl(repoFullName, selectedIssue.filePath, selectedIssue.lineNumber)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 text-sm font-mono text-primary hover:underline break-all"
+                        data-testid="drawer-file-link"
+                      >
+                        <FileCode2 className="w-4 h-4 shrink-0" />
+                        {selectedIssue.filePath}
+                        <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
+                      </a>
+                      <span className="text-xs text-muted-foreground pl-5">Line {selectedIssue.lineNumber}</span>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border bg-muted/30 px-3 py-2.5 text-sm font-mono text-muted-foreground">
+                      {selectedIssue.filePath}
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Affected Element</p>
+                  <pre className="rounded-md border bg-muted/40 px-3 py-2.5 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                    {selectedIssue.element}
+                  </pre>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">WCAG Criterion</p>
+                  <p className="text-sm font-medium">{selectedIssue.wcagCriterion}</p>
+                  {selectedIssue.ruleId && (
+                    <p className="text-xs text-muted-foreground font-mono mt-1">Rule: {selectedIssue.ruleId}</p>
+                  )}
+                </div>
+
+                <Separator />
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Status</p>
+                  {getStatusBadge(selectedIssue.status)}
+                </div>
+
+                <Separator />
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Suggested Fix</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {getSuggestedFix(selectedIssue.ruleId, selectedIssue.wcagCriterion)}
+                  </p>
+                </div>
+              </div>
+
+              <SheetClose asChild>
+                <Button variant="outline" size="sm" className="mt-8 w-full gap-2">
+                  <X className="w-3.5 h-3.5" /> Close
+                </Button>
+              </SheetClose>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
