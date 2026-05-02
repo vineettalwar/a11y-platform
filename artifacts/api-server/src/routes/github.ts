@@ -487,20 +487,23 @@ function analyzeFileContent(content: string, filePath: string): Finding[] {
   if (PAGE_EXTENSIONS.test(filePath)) {
     const idRegex = /\bid\s*=\s*["']([^"']+)["']/gi;
     const idCounts = new Map<string, number>();
+    const idFirstIndex = new Map<string, number>();
     let idMatch: RegExpExecArray | null;
     while ((idMatch = idRegex.exec(content)) !== null) {
       const idVal = idMatch[1]!.trim();
       idCounts.set(idVal, (idCounts.get(idVal) ?? 0) + 1);
+      if (!idFirstIndex.has(idVal)) idFirstIndex.set(idVal, idMatch.index);
     }
     for (const [idVal, count] of idCounts) {
       if (count > 1) {
+        const firstIndex = idFirstIndex.get(idVal) ?? 0;
         findings.push({
           ruleId: "duplicate-id",
           severity: "critical",
           description: `Duplicate id="${idVal}" found ${count} times — IDs must be unique per page`,
           wcagCriterion: "4.1.1 Parsing",
           element: `id="${idVal}"`,
-          lineNumber: 1,
+          lineNumber: content.slice(0, firstIndex).split("\n").length,
         });
         if (findings.length >= 50) return findings;
       }

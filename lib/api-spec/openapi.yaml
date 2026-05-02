@@ -383,6 +383,12 @@ paths:
       operationId: requestIssueAiFix
       tags: [github]
       summary: Stream an AI-generated fix suggestion for an accessibility issue
+      description: >
+        Returns a Server-Sent Events (SSE) stream (`text/event-stream`). Each
+        event carries a partial text chunk; the stream ends when the server
+        closes the connection. **Do not use the auto-generated client hook** for
+        this endpoint — use a manual `fetch` with a `ReadableStream` reader
+        instead, as generated REST clients cannot consume SSE responses.
       parameters:
         - name: id
           in: path
