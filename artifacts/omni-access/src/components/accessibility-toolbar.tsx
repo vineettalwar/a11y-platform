@@ -73,7 +73,7 @@ export default function AccessibilityToolbar() {
       <div
         role="toolbar"
         aria-label="Accessibility settings"
-        className="w-full bg-primary/5 border-b border-primary/10 flex items-center justify-between px-4 h-9 text-xs text-muted-foreground"
+        className="fixed top-0 left-0 right-0 z-50 w-full bg-primary/5 border-b border-primary/10 flex items-center justify-between px-4 h-9 text-xs text-muted-foreground"
       >
         <div className="flex items-center gap-1">
           <span className="hidden sm:inline font-medium text-primary/70 mr-2 flex items-center gap-1">

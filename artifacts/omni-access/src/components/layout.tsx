@@ -8,9 +8,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-background text-foreground font-sans">
+    <div className="min-h-[100dvh] flex flex-col bg-background text-foreground font-sans pt-9">
       <AccessibilityToolbar />
-      <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-9 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" data-testid="link-home">
             <Shield className="h-6 w-6 text-primary" />
