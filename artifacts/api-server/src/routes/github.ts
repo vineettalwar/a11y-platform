@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
-import { db, githubConnections, connectedRepos, scanResults } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, githubConnections, connectedRepos, scanResults, scanHistory } from "@workspace/db";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
@@ -125,6 +126,7 @@ router.delete("/github/disconnect", async (req: Request, res: Response) => {
     }
 
     const userId = req.user.id;
+    await db.delete(scanHistory).where(eq(scanHistory.userId, userId));
     await db.delete(scanResults).where(eq(scanResults.userId, userId));
     await db.delete(connectedRepos).where(eq(connectedRepos.userId, userId));
     await db.delete(githubConnections).where(eq(githubConnections.userId, userId));
@@ -399,6 +401,71 @@ const WCAG_RULES: WcagRule[] = [
     wcagCriterion: "4.1.2 Name, Role, Value",
     getElement: (m) => m.slice(0, 60),
   },
+  // --- New WCAG rules ---
+  {
+    id: "heading-skip",
+    pattern: /<h[1-6][^>]*>/gi,
+    severity: "moderate",
+    description: "Heading level skipped — assistive technologies expect sequential heading hierarchy (e.g. h1→h2→h3)",
+    wcagCriterion: "1.3.1 Info and Relationships",
+    getElement: (m) => m.slice(0, 60),
+  },
+  {
+    id: "div-role-button-no-tabindex",
+    pattern: /<div[^>]*role\s*=\s*["']button["'][^>]*(?!tabindex)[^>]*>/gi,
+    severity: "serious",
+    description: "<div role=\"button\"> missing tabindex — element is not keyboard-reachable",
+    wcagCriterion: "2.1.1 Keyboard",
+    getElement: (m) => m.slice(0, 60),
+  },
+  {
+    id: "missing-main-landmark",
+    pattern: /^(?![\s\S]*<main[\s>])[\s\S]*$/gi,
+    severity: "moderate",
+    description: "Page missing <main> landmark — screen reader users cannot skip to main content",
+    wcagCriterion: "1.3.6 Identify Purpose",
+    getElement: () => "(no <main> landmark found)",
+  },
+  {
+    id: "aria-hidden-focusable",
+    pattern: /<(?:button|a|input|select|textarea)[^>]*aria-hidden\s*=\s*["']true["'][^>]*>/gi,
+    severity: "critical",
+    description: "Focusable element has aria-hidden=\"true\" — it is hidden from assistive technology but still receives keyboard focus",
+    wcagCriterion: "4.1.2 Name, Role, Value",
+    getElement: (m) => m.slice(0, 60),
+  },
+  {
+    id: "invalid-aria-role",
+    pattern: /role\s*=\s*["'](?!alert|alertdialog|application|article|banner|button|cell|checkbox|columnheader|combobox|complementary|contentinfo|definition|dialog|directory|document|feed|figure|form|grid|gridcell|group|heading|img|link|list|listbox|listitem|log|main|marquee|math|menu|menubar|menuitem|menuitemcheckbox|menuitemradio|navigation|none|note|option|presentation|progressbar|radio|radiogroup|region|row|rowgroup|rowheader|scrollbar|search|searchbox|separator|slider|spinbutton|status|switch|tab|table|tablist|tabpanel|term|textbox|timer|toolbar|tooltip|tree|treegrid|treeitem)([^"']+)["']/gi,
+    severity: "serious",
+    description: "Invalid ARIA role value — role does not match any allowed WAI-ARIA role",
+    wcagCriterion: "4.1.2 Name, Role, Value",
+    getElement: (m) => m.slice(0, 80),
+  },
+  {
+    id: "iframe-missing-title",
+    pattern: /<iframe(?![^>]*title=)[^>]*>/gi,
+    severity: "serious",
+    description: "<iframe> missing title attribute — screen readers cannot identify embedded content",
+    wcagCriterion: "4.1.2 Name, Role, Value",
+    getElement: (m) => m.slice(0, 60),
+  },
+  {
+    id: "input-image-missing-alt",
+    pattern: /<input[^>]*type\s*=\s*["']image["'][^>]*(?!alt=)[^>]*>/gi,
+    severity: "critical",
+    description: "<input type=\"image\"> missing alt attribute — image button purpose is not conveyed to screen readers",
+    wcagCriterion: "1.1.1 Non-text Content",
+    getElement: (m) => m.slice(0, 60),
+  },
+  {
+    id: "missing-skip-nav",
+    pattern: /^(?![\s\S]*href\s*=\s*["']#(?:main|main-content|content|skip)["'])[\s\S]*$/gi,
+    severity: "moderate",
+    description: "Page missing skip navigation link — keyboard users cannot bypass repetitive navigation blocks",
+    wcagCriterion: "2.4.1 Bypass Blocks",
+    getElement: () => "(no skip-nav anchor found)",
+  },
 ];
 
 interface Finding {
@@ -410,12 +477,61 @@ interface Finding {
   lineNumber: number;
 }
 
-function analyzeFileContent(content: string): Finding[] {
+function analyzeFileContent(content: string, filePath: string): Finding[] {
   const findings: Finding[] = [];
+  const isHtmlFile = /\.(html|htm)$/i.test(filePath);
 
   for (const rule of WCAG_RULES) {
+    // Page-level rules (missing-main-landmark, missing-skip-nav) only run on HTML files
+    if ((rule.id === "missing-main-landmark" || rule.id === "missing-skip-nav") && !isHtmlFile) {
+      continue;
+    }
+
     const regex = new RegExp(rule.pattern.source, rule.pattern.flags);
     let match: RegExpExecArray | null;
+
+    // Page-level rules that fire at most once per file
+    if (rule.id === "missing-main-landmark" || rule.id === "missing-skip-nav") {
+      match = regex.exec(content);
+      if (match) {
+        findings.push({
+          ruleId: rule.id,
+          severity: rule.severity,
+          description: rule.description,
+          wcagCriterion: rule.wcagCriterion,
+          element: rule.getElement(match[0]),
+          lineNumber: 1,
+        });
+      }
+      continue;
+    }
+
+    // heading-skip: detect actual level skips
+    if (rule.id === "heading-skip") {
+      const headingMatches: Array<{ level: number; index: number }> = [];
+      const headingRegex = /<h([1-6])[^>]*>/gi;
+      let hm: RegExpExecArray | null;
+      while ((hm = headingRegex.exec(content)) !== null) {
+        headingMatches.push({ level: parseInt(hm[1], 10), index: hm.index });
+      }
+      for (let i = 1; i < headingMatches.length; i++) {
+        const prev = headingMatches[i - 1]!;
+        const curr = headingMatches[i]!;
+        if (curr.level > prev.level + 1) {
+          const lineNumber = content.slice(0, curr.index).split("\n").length;
+          findings.push({
+            ruleId: rule.id,
+            severity: rule.severity,
+            description: `Heading jumps from h${prev.level} to h${curr.level} — expected h${prev.level + 1}`,
+            wcagCriterion: rule.wcagCriterion,
+            element: `<h${curr.level}>`,
+            lineNumber,
+          });
+          if (findings.length >= 50) return findings;
+        }
+      }
+      continue;
+    }
 
     while ((match = regex.exec(content)) !== null) {
       const lineNumber = content.slice(0, match.index).split("\n").length;
@@ -438,6 +554,13 @@ function analyzeFileContent(content: string): Finding[] {
 
 const SCANNABLE_EXTENSIONS = [".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte", ".css", ".ts", ".js"];
 const DEFAULT_MAX_FILES = 200;
+
+function computeScore(allFindings: Finding[], filesScanned: number): number {
+  const counts: Record<Severity, number> = { critical: 0, serious: 0, moderate: 0, minor: 0 };
+  for (const f of allFindings) counts[f.severity as Severity]++;
+  const maxPossible = filesScanned * 5;
+  return Math.max(0, Math.round(100 - (allFindings.length / Math.max(maxPossible, 1)) * 100));
+}
 
 router.post("/github/scan", async (req: Request, res: Response) => {
   try {
@@ -505,7 +628,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
             fileData.content.replace(/\n/g, ""),
             "base64",
           ).toString("utf-8");
-          const findings = analyzeFileContent(content);
+          const findings = analyzeFileContent(content, file.path);
           for (const f of findings) {
             allFindings.push({ filePath: file.path, ...f });
           }
@@ -514,15 +637,6 @@ router.post("/github/scan", async (req: Request, res: Response) => {
         // Skip individual files that cannot be fetched
       }
     }
-
-    await db
-      .delete(scanResults)
-      .where(
-        and(
-          eq(scanResults.userId, userId),
-          eq(scanResults.repoFullName, repoFullName),
-        ),
-      );
 
     if (allFindings.length > 0) {
       await db.insert(scanResults).values(
@@ -537,6 +651,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
           description: f.description,
           element: f.element,
           wcagCriterion: f.wcagCriterion,
+          status: "open",
         })),
       );
     }
@@ -555,11 +670,20 @@ router.post("/github/scan", async (req: Request, res: Response) => {
     for (const f of allFindings) counts[f.severity]++;
 
     const totalIssues = allFindings.length;
-    const maxPossible = filesToScan.length * 5;
-    const score = Math.max(
-      0,
-      Math.round(100 - (totalIssues / Math.max(maxPossible, 1)) * 100),
-    );
+    const score = computeScore(allFindings, filesToScan.length);
+
+    await db.insert(scanHistory).values({
+      userId,
+      repoFullName,
+      scanId,
+      scannedAt: new Date(),
+      complianceScore: score,
+      totalIssues,
+      criticalCount: counts.critical,
+      seriousCount: counts.serious,
+      moderateCount: counts.moderate,
+      minorCount: counts.minor,
+    });
 
     res.json({
       repoFullName,
@@ -579,6 +703,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
         description: f.description,
         element: f.element,
         wcagCriterion: f.wcagCriterion,
+        status: "open",
       })),
     });
   } catch (err: unknown) {
@@ -681,7 +806,7 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
             fileData.content.replace(/\n/g, ""),
             "base64",
           ).toString("utf-8");
-          const findings = analyzeFileContent(content);
+          const findings = analyzeFileContent(content, file.path);
           for (const f of findings) {
             allFindings.push({ filePath: file.path, ...f });
           }
@@ -690,15 +815,6 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
         // Skip individual files that cannot be fetched
       }
     }
-
-    await db
-      .delete(scanResults)
-      .where(
-        and(
-          eq(scanResults.userId, userId),
-          eq(scanResults.repoFullName, repoFullName),
-        ),
-      );
 
     if (allFindings.length > 0) {
       await db.insert(scanResults).values(
@@ -713,6 +829,7 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
           description: f.description,
           element: f.element,
           wcagCriterion: f.wcagCriterion,
+          status: "open",
         })),
       );
     }
@@ -731,11 +848,20 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
     for (const f of allFindings) counts[f.severity]++;
 
     const totalIssues = allFindings.length;
-    const maxPossible = filesToScan.length * 5;
-    const score = Math.max(
-      0,
-      Math.round(100 - (totalIssues / Math.max(maxPossible, 1)) * 100),
-    );
+    const score = computeScore(allFindings, filesToScan.length);
+
+    await db.insert(scanHistory).values({
+      userId,
+      repoFullName,
+      scanId,
+      scannedAt: new Date(),
+      complianceScore: score,
+      totalIssues,
+      criticalCount: counts.critical,
+      seriousCount: counts.serious,
+      moderateCount: counts.moderate,
+      minorCount: counts.minor,
+    });
 
     send("complete", {
       repoFullName,
@@ -755,6 +881,7 @@ router.get("/github/scan-stream", async (req: Request, res: Response) => {
         description: f.description,
         element: f.element,
         wcagCriterion: f.wcagCriterion,
+        status: "open",
       })),
     });
   } catch (err: unknown) {
@@ -781,6 +908,25 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
 
     const userId = req.user.id;
 
+    // Get the most recent scanId for this repo/user
+    const [latestHistory] = await db
+      .select()
+      .from(scanHistory)
+      .where(
+        and(
+          eq(scanHistory.userId, userId),
+          eq(scanHistory.repoFullName, repoFullName),
+        ),
+      )
+      .orderBy(desc(scanHistory.scannedAt))
+      .limit(1);
+
+    if (!latestHistory) {
+      res.json({ repoFullName, summary: null, issues: [] });
+      return;
+    }
+
+    // Only return results from the latest scan
     const results = await db
       .select()
       .from(scanResults)
@@ -788,12 +934,26 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
         and(
           eq(scanResults.userId, userId),
           eq(scanResults.repoFullName, repoFullName),
+          eq(scanResults.scanId, latestHistory.scanId),
         ),
       )
       .orderBy(desc(scanResults.createdAt));
 
     if (results.length === 0) {
-      res.json({ repoFullName, summary: null, issues: [] });
+      res.json({
+        repoFullName,
+        summary: {
+          score: latestHistory.complianceScore,
+          totalIssues: 0,
+          critical: 0,
+          serious: 0,
+          moderate: 0,
+          minor: 0,
+          filesScanned: 0,
+          scannedAt: latestHistory.scannedAt.toISOString(),
+        },
+        issues: [],
+      });
       return;
     }
 
@@ -803,20 +963,17 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
       if (sev in counts) counts[sev]++;
     }
 
-    const totalIssues = results.length;
-    const score = Math.max(0, Math.round(100 - Math.min(totalIssues * 2, 100)));
-
     res.json({
       repoFullName,
       summary: {
-        score,
-        totalIssues,
+        score: latestHistory.complianceScore,
+        totalIssues: results.length,
         ...counts,
         filesScanned: new Set(results.map((r) => r.filePath)).size,
-        scannedAt: results[0].createdAt.toISOString(),
+        scannedAt: latestHistory.scannedAt.toISOString(),
       },
-      issues: results.map((r, i) => ({
-        id: `ISS-${String(i + 1).padStart(2, "0")}`,
+      issues: results.map((r) => ({
+        id: String(r.id),
         filePath: r.filePath,
         lineNumber: r.lineNumber,
         ruleId: r.ruleId,
@@ -824,11 +981,215 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
         description: r.description,
         element: r.element,
         wcagCriterion: r.wcagCriterion,
+        status: r.status,
       })),
     });
   } catch (err: unknown) {
     console.error("Scan results error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/github/issues/:id/status
+router.patch("/github/issues/:id/status", async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+
+    const userId = req.user.id;
+    const id = parseInt(req.params["id"] ?? "", 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid issue ID" });
+      return;
+    }
+
+    const { status } = req.body as { status?: unknown };
+    const VALID_STATUSES = ["open", "in-progress", "resolved"];
+    if (!status || typeof status !== "string" || !VALID_STATUSES.includes(status)) {
+      res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
+      return;
+    }
+
+    const [updated] = await db
+      .update(scanResults)
+      .set({ status })
+      .where(and(eq(scanResults.id, id), eq(scanResults.userId, userId)))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+
+    res.json({ id: updated.id, status: updated.status });
+  } catch (err: unknown) {
+    console.error("Issue status update error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/github/issues/bulk-status
+router.post("/github/issues/bulk-status", async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+
+    const userId = req.user.id;
+    const { ids, status } = req.body as { ids?: unknown; status?: unknown };
+
+    const VALID_STATUSES = ["open", "in-progress", "resolved"];
+    if (!status || typeof status !== "string" || !VALID_STATUSES.includes(status)) {
+      res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
+      return;
+    }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: "ids must be a non-empty array" });
+      return;
+    }
+
+    const numericIds = ids.map((id) => parseInt(String(id), 10)).filter((id) => !isNaN(id));
+    if (numericIds.length === 0) {
+      res.status(400).json({ error: "No valid numeric IDs provided" });
+      return;
+    }
+
+    await db
+      .update(scanResults)
+      .set({ status })
+      .where(and(eq(scanResults.userId, userId), inArray(scanResults.id, numericIds)));
+
+    res.json({ updated: numericIds.length, status });
+  } catch (err: unknown) {
+    console.error("Bulk status update error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/github/repos/:repoFullName/scan-history
+router.get("/github/repos/:owner/:repo/scan-history", async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+
+    const userId = req.user.id;
+    const repoFullName = `${req.params["owner"]}/${req.params["repo"]}`;
+
+    const history = await db
+      .select()
+      .from(scanHistory)
+      .where(
+        and(
+          eq(scanHistory.userId, userId),
+          eq(scanHistory.repoFullName, repoFullName),
+        ),
+      )
+      .orderBy(desc(scanHistory.scannedAt));
+
+    res.json({
+      repoFullName,
+      history: history.map((h) => ({
+        id: h.id,
+        scanId: h.scanId,
+        scannedAt: h.scannedAt.toISOString(),
+        complianceScore: h.complianceScore,
+        totalIssues: h.totalIssues,
+        criticalCount: h.criticalCount,
+        seriousCount: h.seriousCount,
+        moderateCount: h.moderateCount,
+        minorCount: h.minorCount,
+      })),
+    });
+  } catch (err: unknown) {
+    console.error("Scan history error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/github/issues/:id/ai-fix
+const AI_FIX_SYSTEM_PROMPT = `You are the Lead Digital Accessibility Consultant and Brand Voice for OmniAccess. You are an expert in WCAG 2.2, European Accessibility Act (EAA) compliance, and sustainable, "Shift-Left" development practices. Your tone is authoritative, warm, transparent, and fiercely ethical.
+
+When given an accessibility issue, provide a specific, actionable code remediation. Format your response as:
+
+1. A brief one-sentence explanation of why this matters
+2. The specific code fix (with a before/after code block)
+3. A short note on how to verify the fix works
+
+Be concise and developer-focused. Use markdown code blocks with appropriate language tags.`;
+
+router.post("/github/issues/:id/ai-fix", async (req: Request, res: Response) => {
+  try {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+
+    const userId = req.user.id;
+    const id = parseInt(req.params["id"] ?? "", 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid issue ID" });
+      return;
+    }
+
+    const [issue] = await db
+      .select()
+      .from(scanResults)
+      .where(and(eq(scanResults.id, id), eq(scanResults.userId, userId)))
+      .limit(1);
+
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+
+    const prompt = `Please provide a specific code fix for this accessibility violation:
+
+**Rule**: ${issue.ruleId}
+**WCAG Criterion**: ${issue.wcagCriterion ?? "N/A"}
+**Severity**: ${issue.severity}
+**Description**: ${issue.description}
+**File**: ${issue.filePath}${issue.lineNumber ? ` (Line ${issue.lineNumber})` : ""}
+**Affected element**: \`${issue.element ?? "N/A"}\`
+
+Provide the remediation code specific to this exact element and rule.`;
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4.1",
+      max_completion_tokens: 1024,
+      messages: [
+        { role: "system", content: AI_FIX_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (err: unknown) {
+    console.error("AI fix error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    } else {
+      res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
+      res.end();
+    }
   }
 });
 
@@ -859,13 +1220,30 @@ router.get("/github/dashboard", async (req: Request, res: Response) => {
       resultsByRepo.get(r.repoFullName)!.push(r);
     }
 
+    // Get latest scan history per repo for scoring
+    const allHistory = await db
+      .select()
+      .from(scanHistory)
+      .where(eq(scanHistory.userId, userId))
+      .orderBy(desc(scanHistory.scannedAt));
+
+    const latestHistoryByRepo = new Map<string, typeof allHistory[0]>();
+    for (const h of allHistory) {
+      if (!latestHistoryByRepo.has(h.repoFullName)) {
+        latestHistoryByRepo.set(h.repoFullName, h);
+      }
+    }
+
     const repoSummaries = repos.map((repo) => {
+      const latestHistory = latestHistoryByRepo.get(repo.repoFullName);
       const results = resultsByRepo.get(repo.repoFullName) ?? [];
-      const criticalIssues = results.filter((r) => r.severity === "critical").length;
-      const totalIssues = results.length;
-      const score = results.length === 0
-        ? null
-        : Math.max(0, Math.round(100 - Math.min(totalIssues * 2, 100)));
+      // Filter to latest scan only for critical count
+      const latestResults = latestHistory
+        ? results.filter((r) => r.scanId === latestHistory.scanId)
+        : [];
+      const criticalIssues = latestResults.filter((r) => r.severity === "critical").length;
+      const totalIssues = latestResults.length;
+      const score = latestHistory?.complianceScore ?? null;
 
       let status: string;
       if (score === null) {
@@ -896,7 +1274,7 @@ router.get("/github/dashboard", async (req: Request, res: Response) => {
       ? Math.round(scannedRepos.reduce((a, r) => a + (r.score ?? 0), 0) / scannedRepos.length)
       : 0;
 
-    const openIssues = allScanResults.length;
+    const openIssues = allScanResults.filter((r) => r.status !== "resolved").length;
 
     const activityFeed: Array<{ id: string; event: string; time: string; type: string }> = [];
     for (const repo of repos) {

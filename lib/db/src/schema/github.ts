@@ -34,7 +34,22 @@ export const scanResults = pgTable("scan_results", {
   description: text("description").notNull(),
   element: text("element"),
   wcagCriterion: text("wcag_criterion"),
+  status: text("status").notNull().default("open"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const scanHistory = pgTable("scan_history", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  repoFullName: text("repo_full_name").notNull(),
+  scanId: text("scan_id").notNull(),
+  scannedAt: timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
+  complianceScore: integer("compliance_score").notNull(),
+  totalIssues: integer("total_issues").notNull(),
+  criticalCount: integer("critical_count").notNull().default(0),
+  seriousCount: integer("serious_count").notNull().default(0),
+  moderateCount: integer("moderate_count").notNull().default(0),
+  minorCount: integer("minor_count").notNull().default(0),
 });
 
 export const insertGithubConnectionSchema = createInsertSchema(githubConnections).omit({
@@ -58,3 +73,9 @@ export const insertScanResultSchema = createInsertSchema(scanResults).omit({
 });
 export type InsertScanResult = z.infer<typeof insertScanResultSchema>;
 export type ScanResult = typeof scanResults.$inferSelect;
+
+export const insertScanHistorySchema = createInsertSchema(scanHistory).omit({
+  id: true,
+});
+export type InsertScanHistory = z.infer<typeof insertScanHistorySchema>;
+export type ScanHistoryEntry = typeof scanHistory.$inferSelect;

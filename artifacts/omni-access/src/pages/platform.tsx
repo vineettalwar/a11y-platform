@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search, ExternalLink, FileCode2, X, LogIn, FileDown, FileText, Filter } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search, ExternalLink, FileCode2, X, LogIn, FileDown, FileText, Filter, Sparkles, TrendingUp } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetCl
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useToast } from "@/hooks/use-toast";
 import {
   useGetGithubStatus,
@@ -26,6 +28,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetGithubStatusQueryKey, getGetConnectedReposQueryKey, getGetScanResultsQueryKey, type GetScanResultsParams } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
+
+const BASE_URL = import.meta.env.BASE_URL ?? "/";
 
 interface ScanProgress {
   current: number;
@@ -43,6 +47,13 @@ interface Issue {
   description?: string;
   ruleId?: string;
   status: string;
+}
+
+interface ScanHistoryPoint {
+  scannedAt: string;
+  complianceScore: number;
+  totalIssues: number;
+  criticalCount: number;
 }
 
 const STATIC_ISSUES: Issue[] = [
@@ -145,7 +156,7 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
     setScanProgress(null);
     setScanError(null);
 
-    const url = `/api/github/scan-stream?repoFullName=${encodeURIComponent(repoFullName)}`;
+    const url = `${BASE_URL}api/github/scan-stream?repoFullName=${encodeURIComponent(repoFullName)}`;
     const es = new EventSource(url, { withCredentials: true });
     esRef.current = es;
 
@@ -194,7 +205,7 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
     r.fullName.toLowerCase().includes(repoSearch.toLowerCase())
   ) ?? [];
 
-  const connectedRepos = connectedReposData?.repos ?? [];
+  const connectedReposList = connectedReposData?.repos ?? [];
 
   if (authLoading || statusLoading) {
     return (
@@ -366,11 +377,11 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
           </Alert>
         )}
 
-        {connectedRepos.length > 0 && (
+        {connectedReposList.length > 0 && (
           <div className="space-y-2">
             <Label>Connected Repositories</Label>
             <div className="space-y-2">
-              {connectedRepos.map((repo) => {
+              {connectedReposList.map((repo) => {
                 const isActive = activeRepo === repo.repoFullName;
                 const isScanning = scanningRepo === repo.repoFullName;
                 const progress = isScanning ? scanProgress : null;
@@ -467,6 +478,14 @@ const SUGGESTED_FIXES: Record<string, string> = {
   "missing-input-type": "Add an explicit type attribute (e.g. type=\"text\", type=\"email\") to improve keyboard behaviour and autofill hints.",
   "max-scale-restriction": "Remove maximum-scale=1 and user-scalable=no from the viewport meta tag to allow users to zoom.",
   "missing-button-type": "Add type=\"button\" (or type=\"submit\" / type=\"reset\") to prevent unintended form submissions.",
+  "heading-skip": "Ensure heading levels are sequential without skipping. Use h1 → h2 → h3 without jumping levels.",
+  "div-role-button-no-tabindex": "Add tabindex=\"0\" to make the element keyboard-reachable, and add an onKeyDown handler for Enter/Space keys.",
+  "missing-main-landmark": "Add a <main> element wrapping the primary page content so screen reader users can navigate directly to it.",
+  "aria-hidden-focusable": "Remove aria-hidden=\"true\" from focusable elements, or remove the focusable attributes (tabindex, disabled) if the element should be hidden.",
+  "invalid-aria-role": "Replace the invalid role with a valid WAI-ARIA role from the allowed roles list, or remove the role attribute if not needed.",
+  "iframe-missing-title": "Add a descriptive title attribute to the <iframe> element (e.g. title=\"Payment form\") so screen readers can identify embedded content.",
+  "input-image-missing-alt": "Add an alt attribute describing the button's action (e.g. alt=\"Submit form\") to the <input type=\"image\"> element.",
+  "missing-skip-nav": "Add a skip navigation link as the first element in <body>: <a href=\"#main-content\" class=\"sr-only focus:not-sr-only\">Skip to main content</a>",
 };
 
 function getSuggestedFix(ruleId?: string, wcagCriterion?: string): string {
@@ -481,9 +500,345 @@ function getSuggestedFix(ruleId?: string, wcagCriterion?: string): string {
   return "Review the WCAG success criterion and update the element to meet the required accessibility standard.";
 }
 
+function useAiFix(issueId: string | null) {
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchFix = useCallback(async (id: string) => {
+    setContent("");
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/github/issues/${id}/ai-fix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) {
+        setError("Failed to get AI fix");
+        return;
+      }
+      if (!res.body) {
+        setError("No response body");
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            if (data.done) continue;
+            if (data.error) { setError(data.error); continue; }
+            if (data.content) {
+              accumulated += data.content;
+              setContent(accumulated);
+            }
+          } catch { /* noop */ }
+        }
+      }
+    } catch {
+      setError("Connection error — please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const reset = useCallback(() => {
+    setContent("");
+    setError(null);
+    setLoading(false);
+  }, []);
+
+  return { content, loading, error, fetchFix, reset };
+}
+
+function ComplianceTrendChart({ repoFullName }: { repoFullName: string }) {
+  const [history, setHistory] = useState<ScanHistoryPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const parts = repoFullName.split("/");
+    if (parts.length !== 2) return;
+    const [owner, repo] = parts;
+    fetch(`${BASE_URL}api/github/repos/${owner}/${repo}/scan-history`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: { history?: ScanHistoryPoint[] }) => {
+        setHistory(data.history ?? []);
+      })
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
+  }, [repoFullName]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-32 text-muted-foreground gap-2 text-sm">
+        <Loader2 className="w-4 h-4 animate-spin" /> Loading trend data…
+      </div>
+    );
+  }
+
+  const chartData = [...history]
+    .reverse()
+    .map((h) => ({
+      date: new Date(h.scannedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      score: h.complianceScore,
+      issues: h.totalIssues,
+    }));
+
+  if (chartData.length < 2) {
+    return (
+      <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2 text-sm">
+        <TrendingUp className="w-6 h-6 opacity-40" />
+        <span>Run another scan to see compliance trends</span>
+      </div>
+    );
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={180}>
+      <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+        <defs>
+          <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+        <Tooltip
+          contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12 }}
+          formatter={(value: number) => [`${value}%`, "Score"]}
+        />
+        <Area
+          type="monotone"
+          dataKey="score"
+          stroke="hsl(var(--primary))"
+          strokeWidth={2}
+          fill="url(#scoreGradient)"
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function IssueDetailSheet({
+  issue,
+  repoFullName,
+  hasResults,
+  isLive,
+  onClose,
+  onStatusChange,
+}: {
+  issue: Issue | null;
+  repoFullName: string | null;
+  hasResults: boolean;
+  isLive: boolean;
+  onClose: () => void;
+  onStatusChange?: (issueId: string, newStatus: string) => void;
+}) {
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const { content: aiContent, loading: aiLoading, error: aiError, fetchFix, reset: resetAi } = useAiFix(null);
+  const [aiOpen, setAiOpen] = useState(false);
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!issue) return;
+    setStatusUpdating(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/github/issues/${issue.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        onStatusChange?.(issue.id, newStatus);
+      }
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
+  const handleGetAiFix = () => {
+    if (!issue) return;
+    resetAi();
+    setAiOpen(true);
+    fetchFix(issue.id);
+  };
+
+  useEffect(() => {
+    if (!issue) {
+      resetAi();
+      setAiOpen(false);
+    }
+  }, [issue, resetAi]);
+
+  return (
+    <Sheet open={!!issue} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        {issue && (
+          <>
+            <SheetHeader className="pr-6">
+              <div className="flex items-center gap-2 mb-1">
+                {getSeverityBadge(issue.severity)}
+                <span className="text-xs text-muted-foreground font-mono">{issue.id}</span>
+              </div>
+              <SheetTitle className="font-serif text-lg leading-snug">
+                {issue.wcagCriterion}
+              </SheetTitle>
+              <SheetDescription className="text-sm">
+                {issue.description ?? "No description available."}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-6 space-y-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Location</p>
+                {isLive && hasResults && repoFullName && issue.lineNumber ? (
+                  <div className="flex flex-col gap-1 rounded-md border bg-muted/30 px-3 py-2.5">
+                    <a
+                      href={buildGithubFileUrl(repoFullName, issue.filePath, issue.lineNumber)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 text-sm font-mono text-primary hover:underline break-all"
+                      data-testid="drawer-file-link"
+                    >
+                      <FileCode2 className="w-4 h-4 shrink-0" />
+                      {issue.filePath}
+                      <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
+                    </a>
+                    <span className="text-xs text-muted-foreground pl-5">Line {issue.lineNumber}</span>
+                  </div>
+                ) : (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2.5 text-sm font-mono text-muted-foreground">
+                    {issue.filePath}
+                    {issue.lineNumber && <span className="ml-2 text-muted-foreground/70">Line {issue.lineNumber}</span>}
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Affected Element</p>
+                <pre className="rounded-md border bg-muted/40 px-3 py-2.5 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                  {issue.element}
+                </pre>
+              </div>
+
+              <Separator />
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">WCAG Criterion</p>
+                <p className="text-sm font-medium">{issue.wcagCriterion}</p>
+                {issue.ruleId && (
+                  <p className="text-xs text-muted-foreground font-mono mt-1">Rule: {issue.ruleId}</p>
+                )}
+              </div>
+
+              <Separator />
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Status</p>
+                {hasResults ? (
+                  <Select
+                    value={issue.status}
+                    onValueChange={handleStatusChange}
+                    disabled={statusUpdating}
+                  >
+                    <SelectTrigger className="w-40 h-8 text-xs" data-testid="issue-status-select">
+                      {statusUpdating && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  getStatusBadge(issue.status)
+                )}
+              </div>
+
+              <Separator />
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Suggested Fix</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {getSuggestedFix(issue.ruleId, issue.wcagCriterion)}
+                </p>
+              </div>
+
+              {hasResults && (
+                <>
+                  <Separator />
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">AI Fix Suggestion</p>
+                      {!aiOpen && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs h-7"
+                          onClick={handleGetAiFix}
+                          data-testid="btn-get-ai-fix"
+                        >
+                          <Sparkles className="w-3 h-3" /> Get AI Fix
+                        </Button>
+                      )}
+                    </div>
+                    {aiOpen && (
+                      <div className="rounded-md border bg-muted/20 p-3">
+                        {aiLoading && !aiContent && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Generating fix suggestion…
+                          </div>
+                        )}
+                        {aiError && (
+                          <p className="text-xs text-destructive">{aiError}</p>
+                        )}
+                        {aiContent && (
+                          <div className="text-xs text-foreground leading-relaxed whitespace-pre-wrap font-mono">
+                            {aiContent}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <SheetClose asChild>
+              <Button variant="outline" size="sm" className="mt-8 w-full gap-2">
+                <X className="w-3.5 h-3.5" /> Close
+              </Button>
+            </SheetClose>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
   const isLive = !!repoFullName;
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [issueStatuses, setIssueStatuses] = useState<Record<string, string>>({});
 
   const { data: scanData, isLoading } = useGetScanResults(
     { repoFullName: repoFullName ?? "" },
@@ -491,10 +846,12 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
   );
 
   const hasResults = isLive && scanData?.summary && scanData.summary.totalIssues >= 0 && scanData.issues.length > 0;
-  const complianceScore = hasResults ? scanData!.summary!.score : 74;
+
+  const complianceScore = hasResults ? scanData!.summary!.score : 78;
+
   const issues: Issue[] = hasResults
     ? scanData!.issues.map((issue) => ({
-        id: issue.id,
+        id: String(issue.id),
         severity: issue.severity,
         wcagCriterion: issue.wcagCriterion ?? issue.ruleId,
         element: issue.element ?? issue.ruleId,
@@ -502,15 +859,22 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
         lineNumber: issue.lineNumber ?? undefined,
         description: issue.description,
         ruleId: issue.ruleId,
-        status: "open",
+        status: issueStatuses[String(issue.id)] ?? (issue.status ?? "open"),
       }))
     : STATIC_ISSUES;
 
   const totalIssues = hasResults ? scanData!.summary!.totalIssues : 47;
   const critical = hasResults ? scanData!.summary!.critical : 8;
-  const inProgress = hasResults ? 0 : 12;
-  const resolved = hasResults ? 0 : 6;
+  const inProgress = issues.filter((i) => i.status === "in-progress").length;
+  const resolved = issues.filter((i) => i.status === "resolved").length;
   const scannedAt = hasResults ? new Date(scanData!.summary!.scannedAt).toLocaleString() : "Today 08:00 AM";
+
+  const handleStatusChange = (issueId: string, newStatus: string) => {
+    setIssueStatuses((prev) => ({ ...prev, [issueId]: newStatus }));
+    if (selectedIssue?.id === issueId) {
+      setSelectedIssue((prev) => prev ? { ...prev, status: newStatus } : null);
+    }
+  };
 
   return (
     <>
@@ -697,6 +1061,20 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
         </Card>
       </div>
 
+      {isLive && hasResults && repoFullName && (
+        <Card data-testid="card-trend-chart">
+          <CardHeader>
+            <CardTitle className="font-serif flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" /> Compliance Score Over Time
+            </CardTitle>
+            <CardDescription>Score trend across all scans for this repository</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ComplianceTrendChart repoFullName={repoFullName} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card data-testid="card-issue-tracker">
         <CardHeader>
           <CardTitle className="font-serif">Active Issue Backlog</CardTitle>
@@ -767,93 +1145,14 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
         </CardContent>
       </Card>
 
-      <Sheet open={!!selectedIssue} onOpenChange={(open) => { if (!open) setSelectedIssue(null); }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          {selectedIssue && (
-            <>
-              <SheetHeader className="pr-6">
-                <div className="flex items-center gap-2 mb-1">
-                  {getSeverityBadge(selectedIssue.severity)}
-                  <span className="text-xs text-muted-foreground font-mono">{selectedIssue.id}</span>
-                </div>
-                <SheetTitle className="font-serif text-lg leading-snug">
-                  {selectedIssue.wcagCriterion}
-                </SheetTitle>
-                <SheetDescription className="text-sm">
-                  {selectedIssue.description ?? "No description available."}
-                </SheetDescription>
-              </SheetHeader>
-
-              <div className="mt-6 space-y-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Location</p>
-                  {hasResults && repoFullName && selectedIssue.lineNumber ? (
-                    <div className="flex flex-col gap-1 rounded-md border bg-muted/30 px-3 py-2.5">
-                      <a
-                        href={buildGithubFileUrl(repoFullName, selectedIssue.filePath, selectedIssue.lineNumber)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1.5 text-sm font-mono text-primary hover:underline break-all"
-                        data-testid="drawer-file-link"
-                      >
-                        <FileCode2 className="w-4 h-4 shrink-0" />
-                        {selectedIssue.filePath}
-                        <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
-                      </a>
-                      <span className="text-xs text-muted-foreground pl-5">Line {selectedIssue.lineNumber}</span>
-                    </div>
-                  ) : (
-                    <div className="rounded-md border bg-muted/30 px-3 py-2.5 text-sm font-mono text-muted-foreground">
-                      {selectedIssue.filePath}
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Affected Element</p>
-                  <pre className="rounded-md border bg-muted/40 px-3 py-2.5 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
-                    {selectedIssue.element}
-                  </pre>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">WCAG Criterion</p>
-                  <p className="text-sm font-medium">{selectedIssue.wcagCriterion}</p>
-                  {selectedIssue.ruleId && (
-                    <p className="text-xs text-muted-foreground font-mono mt-1">Rule: {selectedIssue.ruleId}</p>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Status</p>
-                  {getStatusBadge(selectedIssue.status)}
-                </div>
-
-                <Separator />
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Suggested Fix</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {getSuggestedFix(selectedIssue.ruleId, selectedIssue.wcagCriterion)}
-                  </p>
-                </div>
-              </div>
-
-              <SheetClose asChild>
-                <Button variant="outline" size="sm" className="mt-8 w-full gap-2">
-                  <X className="w-3.5 h-3.5" /> Close
-                </Button>
-              </SheetClose>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+      <IssueDetailSheet
+        issue={selectedIssue}
+        repoFullName={repoFullName}
+        hasResults={hasResults}
+        isLive={isLive}
+        onClose={() => setSelectedIssue(null)}
+        onStatusChange={handleStatusChange}
+      />
     </>
   );
 }
@@ -958,10 +1257,38 @@ export function ReportsTab() {
   );
 }
 
+function exportIssuesToCSV(issues: Issue[]) {
+  const headers = ["ID", "Severity", "WCAG Criterion", "Rule ID", "Description", "File Path", "Line Number", "Element", "Status"];
+  const rows = issues.map((i) => [
+    i.id,
+    i.severity,
+    i.wcagCriterion ?? "",
+    i.ruleId ?? "",
+    (i.description ?? "").replace(/,/g, ";"),
+    i.filePath,
+    String(i.lineNumber ?? ""),
+    (i.element ?? "").replace(/,/g, ";"),
+    i.status,
+  ]);
+  const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "accessibility-issues.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
+  const { toast } = useToast();
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [issueStatuses, setIssueStatuses] = useState<Record<string, string>>({});
+  const [bulkUpdating, setBulkUpdating] = useState(false);
   const isLive = !!repoFullName;
 
   const { data: scanData } = useGetScanResults(
@@ -973,7 +1300,7 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
 
   const allIssues: Issue[] = hasResults
     ? scanData!.issues.map((issue) => ({
-        id: issue.id,
+        id: String(issue.id),
         severity: issue.severity,
         wcagCriterion: issue.wcagCriterion ?? issue.ruleId,
         element: issue.element ?? issue.ruleId,
@@ -981,19 +1308,106 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
         lineNumber: issue.lineNumber ?? undefined,
         description: issue.description,
         ruleId: issue.ruleId,
-        status: "open",
+        status: issueStatuses[String(issue.id)] ?? (issue.status ?? "open"),
       }))
     : STATIC_ISSUES;
 
   const filtered = allIssues.filter((issue) => {
     const sevOk = severityFilter === "all" || issue.severity === severityFilter;
     const stOk = statusFilter === "all" || issue.status === statusFilter;
-    return sevOk && stOk;
+    const q = searchQuery.toLowerCase();
+    const searchOk = !q
+      || issue.wcagCriterion?.toLowerCase().includes(q)
+      || issue.filePath?.toLowerCase().includes(q)
+      || issue.description?.toLowerCase().includes(q)
+      || issue.ruleId?.toLowerCase().includes(q);
+    return sevOk && stOk && searchOk;
   });
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selectedIds.has(i.id));
+
+  const toggleAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((i) => next.delete(i.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filtered.forEach((i) => next.add(i.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkStatus = async (newStatus: string) => {
+    if (!hasResults || selectedIds.size === 0) return;
+    setBulkUpdating(true);
+    const ids = Array.from(selectedIds).map(Number).filter((n) => !isNaN(n));
+    try {
+      const res = await fetch(`${BASE_URL}api/github/issues/bulk-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, status: newStatus }),
+      });
+      if (res.ok) {
+        const updates: Record<string, string> = {};
+        selectedIds.forEach((id) => { updates[id] = newStatus; });
+        setIssueStatuses((prev) => ({ ...prev, ...updates }));
+        setSelectedIds(new Set());
+        toast({ title: `${ids.length} issue${ids.length !== 1 ? "s" : ""} marked as ${newStatus}` });
+      }
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selected = allIssues.filter((i) => selectedIds.has(i.id));
+    exportIssuesToCSV(selected);
+    toast({ title: `Exported ${selected.length} issue${selected.length !== 1 ? "s" : ""} to CSV` });
+  };
+
+  const handleStatusChange = (issueId: string, newStatus: string) => {
+    setIssueStatuses((prev) => ({ ...prev, [issueId]: newStatus }));
+    if (selectedIssue?.id === issueId) {
+      setSelectedIssue((prev) => prev ? { ...prev, status: newStatus } : null);
+    }
+  };
 
   return (
     <div className="space-y-4" data-testid="tab-issues">
       <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input
+            className="h-8 pl-8 text-xs"
+            placeholder="Search by criterion, file path, description…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            data-testid="issues-search"
+          />
+          {searchQuery && (
+            <button
+              className="absolute right-2.5 top-1/2 -translate-y-1/2"
+              onClick={() => setSearchQuery("")}
+            >
+              <X className="w-3 h-3 text-muted-foreground" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Filter className="h-3.5 w-3.5" />
           <span>Filter:</span>
@@ -1030,6 +1444,14 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allFilteredSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Select all filtered issues"
+                      data-testid="checkbox-select-all"
+                    />
+                  </TableHead>
                   <TableHead className="w-[100px]">Severity</TableHead>
                   <TableHead>WCAG Criterion</TableHead>
                   <TableHead className="hidden md:table-cell">Affected Element</TableHead>
@@ -1042,13 +1464,21 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
                   <TableRow
                     key={issue.id}
                     data-testid={`issue-row-${issue.id}`}
-                    className="cursor-pointer hover:bg-muted/40 transition-colors"
+                    className={`cursor-pointer hover:bg-muted/40 transition-colors ${selectedIds.has(issue.id) ? "bg-primary/5" : ""}`}
                     tabIndex={0}
                     role="button"
                     aria-label={`View details for ${issue.id}: ${issue.wcagCriterion}`}
                     onClick={() => setSelectedIssue(issue)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedIssue(issue); } }}
                   >
+                    <TableCell onClick={(e) => { e.stopPropagation(); toggleOne(issue.id); }}>
+                      <Checkbox
+                        checked={selectedIds.has(issue.id)}
+                        onCheckedChange={() => toggleOne(issue.id)}
+                        aria-label={`Select issue ${issue.id}`}
+                        data-testid={`checkbox-issue-${issue.id}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{getSeverityBadge(issue.severity)}</TableCell>
                     <TableCell className="text-sm">{issue.wcagCriterion}</TableCell>
                     <TableCell className="hidden md:table-cell text-xs font-mono bg-muted/30 p-1 rounded max-w-xs truncate">
@@ -1081,7 +1511,7 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
                 ))}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
                       No issues match the current filters.
                     </TableCell>
                   </TableRow>
@@ -1092,59 +1522,76 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
         </CardContent>
       </Card>
 
-      <Sheet open={!!selectedIssue} onOpenChange={(open) => { if (!open) setSelectedIssue(null); }}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          {selectedIssue && (
-            <>
-              <SheetHeader className="pr-6">
-                <div className="flex items-center gap-2 mb-1">
-                  {getSeverityBadge(selectedIssue.severity)}
-                  <span className="text-xs text-muted-foreground font-mono">{selectedIssue.id}</span>
-                </div>
-                <SheetTitle className="font-serif text-lg leading-snug">
-                  {selectedIssue.wcagCriterion}
-                </SheetTitle>
-                <SheetDescription className="text-sm">
-                  {selectedIssue.description ?? "No description available."}
-                </SheetDescription>
-              </SheetHeader>
-              <div className="mt-6 space-y-5">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Location</p>
-                  <div className="rounded-md border bg-muted/30 px-3 py-2.5 text-sm font-mono text-muted-foreground">
-                    {selectedIssue.filePath}
-                    {selectedIssue.lineNumber && <span className="ml-2 text-muted-foreground/70">Line {selectedIssue.lineNumber}</span>}
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Affected Element</p>
-                  <pre className="rounded-md border bg-muted/40 px-3 py-2.5 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
-                    {selectedIssue.element}
-                  </pre>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Status</p>
-                  {getStatusBadge(selectedIssue.status)}
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Suggested Fix</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {getSuggestedFix(selectedIssue.ruleId, selectedIssue.wcagCriterion)}
-                  </p>
-                </div>
-              </div>
-              <SheetClose asChild>
-                <Button variant="outline" size="sm" className="mt-8 w-full gap-2">
-                  <X className="w-3.5 h-3.5" /> Close
-                </Button>
-              </SheetClose>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+      {selectedIds.size > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-card border shadow-2xl rounded-xl px-4 py-3"
+          data-testid="bulk-action-bar"
+        >
+          <span className="text-sm font-medium text-foreground mr-1">
+            {selectedIds.size} selected
+          </span>
+          <Separator orientation="vertical" className="h-5" />
+          <span className="text-xs text-muted-foreground">Mark as:</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            disabled={bulkUpdating || !hasResults}
+            onClick={() => handleBulkStatus("open")}
+            data-testid="bulk-mark-open"
+          >
+            Open
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1 text-orange-600 border-orange-500/40"
+            disabled={bulkUpdating || !hasResults}
+            onClick={() => handleBulkStatus("in-progress")}
+            data-testid="bulk-mark-in-progress"
+          >
+            In Progress
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1 text-green-700 border-green-600/40"
+            disabled={bulkUpdating || !hasResults}
+            onClick={() => handleBulkStatus("resolved")}
+            data-testid="bulk-mark-resolved"
+          >
+            Resolved
+          </Button>
+          <Separator orientation="vertical" className="h-5" />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            onClick={handleBulkExport}
+            data-testid="bulk-export-csv"
+          >
+            <FileDown className="w-3 h-3" /> Export CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs ml-1"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            <X className="w-3 h-3" />
+          </Button>
+          {bulkUpdating && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+        </div>
+      )}
+
+      <IssueDetailSheet
+        issue={selectedIssue}
+        repoFullName={repoFullName}
+        hasResults={hasResults}
+        isLive={isLive}
+        onClose={() => setSelectedIssue(null)}
+        onStatusChange={handleStatusChange}
+      />
     </div>
   );
 }
@@ -1157,7 +1604,7 @@ export default function Platform() {
 
   const [activeRepo, setActiveRepo] = useState<string | null>(repoParam);
   const { data: connectedReposData } = useGetConnectedRepos();
-  const connectedRepos = connectedReposData?.repos ?? [];
+  const connectedReposList = connectedReposData?.repos ?? [];
 
   useEffect(() => {
     if (repoParam) {
@@ -1166,7 +1613,7 @@ export default function Platform() {
   }, [repoParam]);
 
   const resolvedActiveRepo =
-    activeRepo ?? connectedRepos[0]?.repoFullName ?? null;
+    activeRepo ?? connectedReposList[0]?.repoFullName ?? null;
 
   return (
     <div className="min-h-screen bg-muted/20 py-8 px-4" data-testid="page-platform">
