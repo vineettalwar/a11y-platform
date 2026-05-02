@@ -102,9 +102,10 @@ export default function ChatWidget() {
             size="icon" 
             className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"
             onClick={() => setIsOpen(true)}
+            aria-label="Open Aria chat assistant"
             data-testid="btn-open-chat"
           >
-            <MessageCircle className="h-6 w-6" />
+            <MessageCircle className="h-6 w-6" aria-hidden="true" />
           </Button>
         )}
       </div>
@@ -121,8 +122,8 @@ export default function ChatWidget() {
                 <p className="text-xs opacity-80">Lead Accessibility Consultant</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground" onClick={() => setIsOpen(false)} data-testid="btn-close-chat">
-              <X className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20 hover:text-primary-foreground" onClick={() => setIsOpen(false)} aria-label="Close chat" data-testid="btn-close-chat">
+              <X className="h-5 w-5" aria-hidden="true" />
             </Button>
           </CardHeader>
           <CardContent className="flex-1 p-0 overflow-hidden relative bg-muted/30">
@@ -163,8 +164,8 @@ export default function ChatWidget() {
                 disabled={isLoading}
                 data-testid="input-chat-message"
               />
-              <Button type="submit" size="icon" disabled={isLoading || !input.trim()} data-testid="btn-send-chat">
-                <Send className="h-4 w-4" />
+              <Button type="submit" size="icon" disabled={isLoading || !input.trim()} aria-label="Send message" data-testid="btn-send-chat">
+                <Send className="h-4 w-4" aria-hidden="true" />
               </Button>
             </form>
           </CardFooter>
