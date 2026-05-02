@@ -656,6 +656,9 @@ function IssueDetailSheet({
 
   const handleStatusChange = async (newStatus: string) => {
     if (!issue) return;
+    const prevStatus = issue.status;
+    // Optimistic update — apply immediately, revert on failure
+    onStatusChange?.(issue.id, newStatus);
     setStatusUpdating(true);
     try {
       const res = await fetch(`${BASE_URL}api/github/issues/${issue.id}/status`, {
@@ -664,9 +667,11 @@ function IssueDetailSheet({
         credentials: "include",
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) {
-        onStatusChange?.(issue.id, newStatus);
+      if (!res.ok) {
+        onStatusChange?.(issue.id, prevStatus);
       }
+    } catch {
+      onStatusChange?.(issue.id, prevStatus);
     } finally {
       setStatusUpdating(false);
     }
@@ -845,7 +850,7 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
     { query: { enabled: isLive } }
   );
 
-  const hasResults = isLive && scanData?.summary && scanData.summary.totalIssues >= 0 && scanData.issues.length > 0;
+  const hasResults = isLive && !!scanData?.summary;
 
   const complianceScore = hasResults ? scanData!.summary!.score : 78;
 
@@ -1296,7 +1301,7 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
     { query: { enabled: isLive } }
   );
 
-  const hasResults = isLive && scanData?.summary && scanData.summary.totalIssues >= 0 && scanData.issues.length > 0;
+  const hasResults = isLive && !!scanData?.summary;
 
   const allIssues: Issue[] = hasResults
     ? scanData!.issues.map((issue) => ({

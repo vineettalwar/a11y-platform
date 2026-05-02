@@ -412,14 +412,6 @@ const WCAG_RULES: WcagRule[] = [
     getElement: (m) => m.slice(0, 60),
   },
   {
-    id: "div-role-button-no-tabindex",
-    pattern: /<div[^>]*role\s*=\s*["']button["'][^>]*(?!tabindex)[^>]*>/gi,
-    severity: "serious",
-    description: "<div role=\"button\"> missing tabindex — element is not keyboard-reachable",
-    wcagCriterion: "2.1.1 Keyboard",
-    getElement: (m) => m.slice(0, 60),
-  },
-  {
     id: "missing-main-landmark",
     pattern: /^(?![\s\S]*<main[\s>])[\s\S]*$/gi,
     severity: "moderate",
@@ -449,14 +441,6 @@ const WCAG_RULES: WcagRule[] = [
     severity: "serious",
     description: "<iframe> missing title attribute — screen readers cannot identify embedded content",
     wcagCriterion: "4.1.2 Name, Role, Value",
-    getElement: (m) => m.slice(0, 60),
-  },
-  {
-    id: "input-image-missing-alt",
-    pattern: /<input[^>]*type\s*=\s*["']image["'][^>]*(?!alt=)[^>]*>/gi,
-    severity: "critical",
-    description: "<input type=\"image\"> missing alt attribute — image button purpose is not conveyed to screen readers",
-    wcagCriterion: "1.1.1 Non-text Content",
     getElement: (m) => m.slice(0, 60),
   },
   {
@@ -517,6 +501,44 @@ function analyzeFileContent(content: string, filePath: string): Finding[] {
           wcagCriterion: "4.1.1 Parsing",
           element: `id="${idVal}"`,
           lineNumber: 1,
+        });
+        if (findings.length >= 50) return findings;
+      }
+    }
+  }
+
+  // div[role="button"] without tabindex — post-match filter avoids lookahead false positives
+  {
+    const divRoleButtonRegex = /<div[^>]*role\s*=\s*["']button["'][^>]*>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = divRoleButtonRegex.exec(content)) !== null) {
+      if (!/tabindex/i.test(m[0])) {
+        findings.push({
+          ruleId: "div-role-button-no-tabindex",
+          severity: "serious",
+          description: "<div role=\"button\"> missing tabindex — element is not keyboard-reachable",
+          wcagCriterion: "2.1.1 Keyboard",
+          element: m[0].slice(0, 60),
+          lineNumber: content.slice(0, m.index).split("\n").length,
+        });
+        if (findings.length >= 50) return findings;
+      }
+    }
+  }
+
+  // <input type="image"> without alt — post-match filter avoids lookahead false positives
+  {
+    const inputImageRegex = /<input[^>]*type\s*=\s*["']image["'][^>]*>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = inputImageRegex.exec(content)) !== null) {
+      if (!/\balt\s*=/i.test(m[0])) {
+        findings.push({
+          ruleId: "input-image-missing-alt",
+          severity: "critical",
+          description: "<input type=\"image\"> missing alt attribute — image button purpose is not conveyed to screen readers",
+          wcagCriterion: "1.1.1 Non-text Content",
+          element: m[0].slice(0, 60),
+          lineNumber: content.slice(0, m.index).split("\n").length,
         });
         if (findings.length >= 50) return findings;
       }
