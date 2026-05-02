@@ -1071,7 +1071,7 @@ router.patch("/github/issues/:id/status", async (req: Request, res: Response) =>
     }
 
     const userId = req.user.id;
-    const id = parseInt(req.params["id"] ?? "", 10);
+    const id = parseInt(String(req.params["id"] ?? ""), 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid issue ID" });
       return;
@@ -1194,7 +1194,7 @@ router.post("/github/issues/:id/ai-fix", async (req: Request, res: Response) => 
     }
 
     const userId = req.user.id;
-    const id = parseInt(req.params["id"] ?? "", 10);
+    const id = parseInt(String(req.params["id"] ?? ""), 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid issue ID" });
       return;

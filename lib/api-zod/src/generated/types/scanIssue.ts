@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { IssueStatus } from "./issueStatus";
 import type { ScanIssueSeverity } from "./scanIssueSeverity";
 
 export interface ScanIssue {
@@ -16,4 +17,5 @@ export interface ScanIssue {
   description: string;
   element?: string;
   wcagCriterion?: string;
+  status: IssueStatus;
 }

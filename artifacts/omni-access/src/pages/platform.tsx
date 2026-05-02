@@ -24,6 +24,10 @@ import {
   useGetConnectedRepos,
   useConnectRepo,
   useGetScanResults,
+  useUpdateIssueStatus,
+  useBulkUpdateIssueStatus,
+  useGetRepoScanHistory,
+  type IssueStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetGithubStatusQueryKey, getGetConnectedReposQueryKey, getGetScanResultsQueryKey, type GetScanResultsParams } from "@workspace/api-client-react";
@@ -104,7 +108,7 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
   const esRef = useRef<EventSource | null>(null);
 
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
-  const { data: status, isLoading: statusLoading } = useGetGithubStatus({ query: { enabled: isAuthenticated } });
+  const { data: status, isLoading: statusLoading } = useGetGithubStatus({ query: { enabled: isAuthenticated, queryKey: [] } });
 
   useEffect(() => {
     if (autoOpenConnect && !statusLoading) {
@@ -117,7 +121,7 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
   }, [autoOpenConnect, status?.connected, statusLoading]);
   const connectMutation = useConnectGithub();
   const disconnectMutation = useDisconnectGithub();
-  const { data: reposData, isLoading: reposLoading } = useListGithubRepos({ query: { enabled: status?.connected === true } });
+  const { data: reposData, isLoading: reposLoading } = useListGithubRepos({ query: { enabled: status?.connected === true, queryKey: [] } });
   const { data: connectedReposData, refetch: refetchConnectedRepos } = useGetConnectedRepos();
   const connectRepoMutation = useConnectRepo();
 
@@ -565,22 +569,18 @@ function useAiFix(issueId: string | null) {
 }
 
 function ComplianceTrendChart({ repoFullName }: { repoFullName: string }) {
-  const [history, setHistory] = useState<ScanHistoryPoint[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    const parts = repoFullName.split("/");
-    if (parts.length !== 2) return;
-    const [owner, repo] = parts;
-    fetch(`${BASE_URL}api/github/repos/${owner}/${repo}/scan-history`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data: { history?: ScanHistoryPoint[] }) => {
-        setHistory(data.history ?? []);
-      })
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
-  }, [repoFullName]);
+  const parts = repoFullName.split("/");
+  const owner = parts[0] ?? "";
+  const repo = parts[1] ?? "";
+  const { data: historyData, isLoading: loading } = useGetRepoScanHistory(owner, repo, {
+    query: { enabled: parts.length === 2 && !!owner && !!repo, queryKey: [] },
+  });
+  const history: ScanHistoryPoint[] = (historyData?.history ?? []).map((h) => ({
+    scannedAt: h.scannedAt,
+    complianceScore: h.complianceScore,
+    totalIssues: h.totalIssues,
+    criticalCount: h.criticalCount,
+  }));
 
   if (loading) {
     return (
@@ -653,6 +653,7 @@ function IssueDetailSheet({
   const [statusUpdating, setStatusUpdating] = useState(false);
   const { content: aiContent, loading: aiLoading, error: aiError, fetchFix, reset: resetAi } = useAiFix(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const updateStatusMutation = useUpdateIssueStatus();
 
   const handleStatusChange = async (newStatus: string) => {
     if (!issue) return;
@@ -661,15 +662,10 @@ function IssueDetailSheet({
     onStatusChange?.(issue.id, newStatus);
     setStatusUpdating(true);
     try {
-      const res = await fetch(`${BASE_URL}api/github/issues/${issue.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status: newStatus }),
+      await updateStatusMutation.mutateAsync({
+        id: parseInt(issue.id, 10),
+        data: { status: newStatus as IssueStatus },
       });
-      if (!res.ok) {
-        onStatusChange?.(issue.id, prevStatus);
-      }
     } catch {
       onStatusChange?.(issue.id, prevStatus);
     } finally {
@@ -847,7 +843,7 @@ function LiveDashboard({ repoFullName }: { repoFullName: string | null }) {
 
   const { data: scanData, isLoading } = useGetScanResults(
     { repoFullName: repoFullName ?? "" },
-    { query: { enabled: isLive } }
+    { query: { enabled: isLive, queryKey: [] } }
   );
 
   const hasResults = isLive && !!scanData?.summary;
@@ -1262,6 +1258,13 @@ export function ReportsTab() {
   );
 }
 
+function csvEscapeField(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
 function exportIssuesToCSV(issues: Issue[]) {
   const headers = ["ID", "Severity", "WCAG Criterion", "Rule ID", "Description", "File Path", "Line Number", "Element", "Status"];
   const rows = issues.map((i) => [
@@ -1269,14 +1272,14 @@ function exportIssuesToCSV(issues: Issue[]) {
     i.severity,
     i.wcagCriterion ?? "",
     i.ruleId ?? "",
-    (i.description ?? "").replace(/,/g, ";"),
+    i.description ?? "",
     i.filePath,
     String(i.lineNumber ?? ""),
-    (i.element ?? "").replace(/,/g, ";"),
+    i.element ?? "",
     i.status,
   ]);
-  const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
+  const csv = [headers, ...rows].map((row) => row.map(csvEscapeField).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -1293,12 +1296,13 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [issueStatuses, setIssueStatuses] = useState<Record<string, string>>({});
+  const bulkUpdateMutation = useBulkUpdateIssueStatus();
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const isLive = !!repoFullName;
 
   const { data: scanData } = useGetScanResults(
     { repoFullName: repoFullName ?? "" },
-    { query: { enabled: isLive } }
+    { query: { enabled: isLive, queryKey: [] } }
   );
 
   const hasResults = isLive && !!scanData?.summary;
@@ -1361,19 +1365,16 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
     setBulkUpdating(true);
     const ids = Array.from(selectedIds).map(Number).filter((n) => !isNaN(n));
     try {
-      const res = await fetch(`${BASE_URL}api/github/issues/bulk-status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids, status: newStatus }),
+      await bulkUpdateMutation.mutateAsync({
+        data: { ids, status: newStatus as IssueStatus },
       });
-      if (res.ok) {
-        const updates: Record<string, string> = {};
-        selectedIds.forEach((id) => { updates[id] = newStatus; });
-        setIssueStatuses((prev) => ({ ...prev, ...updates }));
-        setSelectedIds(new Set());
-        toast({ title: `${ids.length} issue${ids.length !== 1 ? "s" : ""} marked as ${newStatus}` });
-      }
+      const updates: Record<string, string> = {};
+      selectedIds.forEach((id) => { updates[id] = newStatus; });
+      setIssueStatuses((prev) => ({ ...prev, ...updates }));
+      setSelectedIds(new Set());
+      toast({ title: `${ids.length} issue${ids.length !== 1 ? "s" : ""} marked as ${newStatus}` });
+    } catch {
+      toast({ title: "Failed to update statuses", variant: "destructive" });
     } finally {
       setBulkUpdating(false);
     }

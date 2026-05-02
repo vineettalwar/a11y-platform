@@ -145,6 +145,14 @@ export interface ScanRequest {
   repoFullName: string;
 }
 
+export type IssueStatus = (typeof IssueStatus)[keyof typeof IssueStatus];
+
+export const IssueStatus = {
+  open: "open",
+  in_progress: "in_progress",
+  resolved: "resolved",
+} as const;
+
 export type ScanIssueSeverity =
   (typeof ScanIssueSeverity)[keyof typeof ScanIssueSeverity];
 
@@ -164,6 +172,43 @@ export interface ScanIssue {
   description: string;
   element?: string;
   wcagCriterion?: string;
+  status: IssueStatus;
+}
+
+export interface IssueStatusUpdateRequest {
+  status: IssueStatus;
+}
+
+export interface IssueStatusUpdateResult {
+  updated: boolean;
+  status: IssueStatus;
+}
+
+export interface BulkIssueStatusRequest {
+  ids: number[];
+  status: IssueStatus;
+}
+
+export interface BulkIssueStatusResult {
+  updated: number;
+  status: IssueStatus;
+}
+
+export interface ScanHistoryEntry {
+  id: number;
+  scanId: string;
+  scannedAt: string;
+  complianceScore: number;
+  totalIssues: number;
+  criticalCount: number;
+  seriousCount: number;
+  moderateCount: number;
+  minorCount: number;
+}
+
+export interface ScanHistoryResponse {
+  repoFullName: string;
+  history: ScanHistoryEntry[];
 }
 
 export interface ScanSummary {

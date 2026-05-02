@@ -335,6 +335,110 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScanResponse"
 
+  /github/issues/{id}/status:
+    patch:
+      operationId: updateIssueStatus
+      tags: [github]
+      summary: Update the status of a single accessibility issue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueStatusUpdateRequest"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueStatusUpdateResult"
+        "400":
+          description: Invalid status value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Issue not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/issues/bulk-status:
+    post:
+      operationId: bulkUpdateIssueStatus
+      tags: [github]
+      summary: Bulk update the status of multiple accessibility issues
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkIssueStatusRequest"
+      responses:
+        "200":
+          description: Statuses updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkIssueStatusResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /github/repos/{owner}/{repo}/scan-history:
+    get:
+      operationId: getRepoScanHistory
+      tags: [github]
+      summary: Get historical scan data for compliance trend chart
+      parameters:
+        - name: owner
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scan history entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanHistoryResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     AuthorizationSessionHeader:
@@ -618,6 +722,10 @@ components:
       required:
         - repoFullName
 
+    IssueStatus:
+      type: string
+      enum: [open, in_progress, resolved]
+
     ScanIssue:
       type: object
       properties:
@@ -638,12 +746,104 @@ components:
           type: string
         wcagCriterion:
           type: string
+        status:
+          $ref: "#/components/schemas/IssueStatus"
       required:
         - id
         - filePath
         - ruleId
         - severity
         - description
+        - status
+
+    IssueStatusUpdateRequest:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/IssueStatus"
+      required:
+        - status
+
+    IssueStatusUpdateResult:
+      type: object
+      properties:
+        updated:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/IssueStatus"
+      required:
+        - updated
+        - status
+
+    BulkIssueStatusRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+        status:
+          $ref: "#/components/schemas/IssueStatus"
+      required:
+        - ids
+        - status
+
+    BulkIssueStatusResult:
+      type: object
+      properties:
+        updated:
+          type: integer
+        status:
+          $ref: "#/components/schemas/IssueStatus"
+      required:
+        - updated
+        - status
+
+    ScanHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        scanId:
+          type: string
+        scannedAt:
+          type: string
+          format: date-time
+        complianceScore:
+          type: integer
+        totalIssues:
+          type: integer
+        criticalCount:
+          type: integer
+        seriousCount:
+          type: integer
+        moderateCount:
+          type: integer
+        minorCount:
+          type: integer
+      required:
+        - id
+        - scanId
+        - scannedAt
+        - complianceScore
+        - totalIssues
+        - criticalCount
+        - seriousCount
+        - moderateCount
+        - minorCount
+
+    ScanHistoryResponse:
+      type: object
+      properties:
+        repoFullName:
+          type: string
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanHistoryEntry"
+      required:
+        - repoFullName
+        - history
 
     ScanSummary:
       type: object

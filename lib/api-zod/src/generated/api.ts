@@ -233,6 +233,7 @@ export const ScanRepoResponse = zod.object({
       description: zod.string(),
       element: zod.string().optional(),
       wcagCriterion: zod.string().optional(),
+      status: zod.enum(["open", "in_progress", "resolved"]),
     }),
   ),
 });
@@ -271,6 +272,61 @@ export const GetScanResultsResponse = zod.object({
       description: zod.string(),
       element: zod.string().optional(),
       wcagCriterion: zod.string().optional(),
+      status: zod.enum(["open", "in_progress", "resolved"]),
+    }),
+  ),
+});
+
+/**
+ * @summary Update the status of a single accessibility issue
+ */
+export const UpdateIssueStatusParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateIssueStatusBody = zod.object({
+  status: zod.enum(["open", "in_progress", "resolved"]),
+});
+
+export const UpdateIssueStatusResponse = zod.object({
+  updated: zod.boolean(),
+  status: zod.enum(["open", "in_progress", "resolved"]),
+});
+
+/**
+ * @summary Bulk update the status of multiple accessibility issues
+ */
+export const BulkUpdateIssueStatusBody = zod.object({
+  ids: zod.array(zod.number()),
+  status: zod.enum(["open", "in_progress", "resolved"]),
+});
+
+export const BulkUpdateIssueStatusResponse = zod.object({
+  updated: zod.number(),
+  status: zod.enum(["open", "in_progress", "resolved"]),
+});
+
+/**
+ * @summary Get historical scan data for compliance trend chart
+ */
+export const GetRepoScanHistoryParams = zod.object({
+  owner: zod.coerce.string(),
+  repo: zod.coerce.string(),
+});
+
+export const GetRepoScanHistoryResponse = zod.object({
+  repoFullName: zod.string(),
+  history: zod.array(
+    zod.object({
+      id: zod.number(),
+      scanId: zod.string(),
+      scannedAt: zod.coerce.date(),
+      complianceScore: zod.number(),
+      totalIssues: zod.number(),
+      criticalCount: zod.number(),
+      seriousCount: zod.number(),
+      moderateCount: zod.number(),
+      minorCount: zod.number(),
     }),
   ),
 });

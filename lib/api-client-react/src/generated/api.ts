@@ -19,6 +19,8 @@ import type {
 import type {
   AuthUserEnvelope,
   BeginBrowserLoginParams,
+  BulkIssueStatusRequest,
+  BulkIssueStatusResult,
   ChatRequest,
   ConnectRepoRequest,
   ConnectedRepoResponse,
@@ -32,11 +34,14 @@ import type {
   GithubStatusResponse,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
+  IssueStatusUpdateRequest,
+  IssueStatusUpdateResult,
   LeadRequest,
   LeadResponse,
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
+  ScanHistoryResponse,
   ScanRequest,
   ScanResponse,
   SuccessResponse,
@@ -1474,6 +1479,275 @@ export function useGetScanResults<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetScanResultsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update the status of a single accessibility issue
+ */
+export const getUpdateIssueStatusUrl = (id: number) => {
+  return `/api/github/issues/${id}/status`;
+};
+
+export const updateIssueStatus = async (
+  id: number,
+  issueStatusUpdateRequest: IssueStatusUpdateRequest,
+  options?: RequestInit,
+): Promise<IssueStatusUpdateResult> => {
+  return customFetch<IssueStatusUpdateResult>(getUpdateIssueStatusUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(issueStatusUpdateRequest),
+  });
+};
+
+export const getUpdateIssueStatusMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateIssueStatus>>,
+    TError,
+    { id: number; data: BodyType<IssueStatusUpdateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateIssueStatus>>,
+  TError,
+  { id: number; data: BodyType<IssueStatusUpdateRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateIssueStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateIssueStatus>>,
+    { id: number; data: BodyType<IssueStatusUpdateRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateIssueStatus(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateIssueStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateIssueStatus>>
+>;
+export type UpdateIssueStatusMutationBody = BodyType<IssueStatusUpdateRequest>;
+export type UpdateIssueStatusMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update the status of a single accessibility issue
+ */
+export const useUpdateIssueStatus = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateIssueStatus>>,
+    TError,
+    { id: number; data: BodyType<IssueStatusUpdateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateIssueStatus>>,
+  TError,
+  { id: number; data: BodyType<IssueStatusUpdateRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateIssueStatusMutationOptions(options));
+};
+
+/**
+ * @summary Bulk update the status of multiple accessibility issues
+ */
+export const getBulkUpdateIssueStatusUrl = () => {
+  return `/api/github/issues/bulk-status`;
+};
+
+export const bulkUpdateIssueStatus = async (
+  bulkIssueStatusRequest: BulkIssueStatusRequest,
+  options?: RequestInit,
+): Promise<BulkIssueStatusResult> => {
+  return customFetch<BulkIssueStatusResult>(getBulkUpdateIssueStatusUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkIssueStatusRequest),
+  });
+};
+
+export const getBulkUpdateIssueStatusMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkUpdateIssueStatus>>,
+    TError,
+    { data: BodyType<BulkIssueStatusRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkUpdateIssueStatus>>,
+  TError,
+  { data: BodyType<BulkIssueStatusRequest> },
+  TContext
+> => {
+  const mutationKey = ["bulkUpdateIssueStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkUpdateIssueStatus>>,
+    { data: BodyType<BulkIssueStatusRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkUpdateIssueStatus(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkUpdateIssueStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkUpdateIssueStatus>>
+>;
+export type BulkUpdateIssueStatusMutationBody =
+  BodyType<BulkIssueStatusRequest>;
+export type BulkUpdateIssueStatusMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Bulk update the status of multiple accessibility issues
+ */
+export const useBulkUpdateIssueStatus = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkUpdateIssueStatus>>,
+    TError,
+    { data: BodyType<BulkIssueStatusRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkUpdateIssueStatus>>,
+  TError,
+  { data: BodyType<BulkIssueStatusRequest> },
+  TContext
+> => {
+  return useMutation(getBulkUpdateIssueStatusMutationOptions(options));
+};
+
+/**
+ * @summary Get historical scan data for compliance trend chart
+ */
+export const getGetRepoScanHistoryUrl = (owner: string, repo: string) => {
+  return `/api/github/repos/${owner}/${repo}/scan-history`;
+};
+
+export const getRepoScanHistory = async (
+  owner: string,
+  repo: string,
+  options?: RequestInit,
+): Promise<ScanHistoryResponse> => {
+  return customFetch<ScanHistoryResponse>(
+    getGetRepoScanHistoryUrl(owner, repo),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetRepoScanHistoryQueryKey = (owner: string, repo: string) => {
+  return [`/api/github/repos/${owner}/${repo}/scan-history`] as const;
+};
+
+export const getGetRepoScanHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRepoScanHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  owner: string,
+  repo: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRepoScanHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRepoScanHistoryQueryKey(owner, repo);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRepoScanHistory>>
+  > = ({ signal }) =>
+    getRepoScanHistory(owner, repo, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(owner && repo),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRepoScanHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRepoScanHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRepoScanHistory>>
+>;
+export type GetRepoScanHistoryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get historical scan data for compliance trend chart
+ */
+
+export function useGetRepoScanHistory<
+  TData = Awaited<ReturnType<typeof getRepoScanHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  owner: string,
+  repo: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRepoScanHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRepoScanHistoryQueryOptions(owner, repo, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
