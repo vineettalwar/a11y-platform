@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Shield } from "lucide-react";
@@ -6,27 +7,34 @@ import AccessibilityToolbar from "./accessibility-toolbar";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const [toolbarDismissed, setToolbarDismissed] = useState(false);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-background text-foreground font-sans pt-9">
-      <AccessibilityToolbar />
-      <header className="sticky top-9 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div
+      className="min-h-[100dvh] flex flex-col bg-background text-foreground font-sans"
+      style={{ paddingTop: toolbarDismissed ? 0 : "2.25rem" }}
+    >
+      <AccessibilityToolbar onDismissedChange={setToolbarDismissed} />
+      <header
+        className="sticky z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        style={{ top: toolbarDismissed ? 0 : "2.25rem" }}
+      >
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" data-testid="link-home">
             <Shield className="h-6 w-6 text-primary" />
             <span className="font-serif font-bold text-xl tracking-tight">OmniAccess</span>
           </Link>
-          
+
           <nav className="hidden md:flex items-center gap-6">
-            <Link 
-              href="/platform" 
+            <Link
+              href="/platform"
               className={`text-sm font-medium transition-colors hover:text-primary ${location === "/platform" ? "text-primary" : "text-muted-foreground"}`}
               data-testid="link-platform"
             >
               Platform
             </Link>
-            <Link 
-              href="/services" 
+            <Link
+              href="/services"
               className={`text-sm font-medium transition-colors hover:text-primary ${location === "/services" ? "text-primary" : "text-muted-foreground"}`}
               data-testid="link-services"
             >

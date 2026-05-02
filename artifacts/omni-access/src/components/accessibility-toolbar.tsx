@@ -3,6 +3,7 @@ import { Type, Sun, ChevronDown } from "lucide-react";
 
 const STORAGE_KEY_FONT_SIZE = "omni-font-size";
 const STORAGE_KEY_CONTRAST = "omni-high-contrast";
+const STORAGE_KEY_DISMISSED = "omni-toolbar-dismissed";
 const FONT_SIZES = ["text-sm-root", "text-base-root", "text-lg-root"] as const;
 type FontSizeClass = typeof FONT_SIZES[number];
 
@@ -16,7 +17,11 @@ function applyContrast(on: boolean) {
   document.documentElement.classList.toggle("high-contrast", on);
 }
 
-export default function AccessibilityToolbar() {
+interface AccessibilityToolbarProps {
+  onDismissedChange: (dismissed: boolean) => void;
+}
+
+export default function AccessibilityToolbar({ onDismissedChange }: AccessibilityToolbarProps) {
   const [fontIdx, setFontIdx] = useState<number>(() => {
     if (typeof window === "undefined") return 1;
     return Number(localStorage.getItem(STORAGE_KEY_FONT_SIZE) ?? "1");
@@ -25,11 +30,18 @@ export default function AccessibilityToolbar() {
     if (typeof window === "undefined") return false;
     return localStorage.getItem(STORAGE_KEY_CONTRAST) === "true";
   });
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(STORAGE_KEY_DISMISSED) === "true";
+  });
 
   useEffect(() => {
     applyFontSize(FONT_SIZES[fontIdx]);
     applyContrast(highContrast);
+    if (typeof onDismissedChange === "function") {
+      onDismissedChange(dismissed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const decreaseFont = useCallback(() => {
@@ -59,6 +71,12 @@ export default function AccessibilityToolbar() {
     });
   }, []);
 
+  const handleDismiss = useCallback(() => {
+    setDismissed(true);
+    localStorage.setItem(STORAGE_KEY_DISMISSED, "true");
+    onDismissedChange(true);
+  }, [onDismissedChange]);
+
   if (dismissed) return null;
 
   return (
@@ -76,7 +94,7 @@ export default function AccessibilityToolbar() {
         className="fixed top-0 left-0 right-0 z-50 w-full bg-primary/5 border-b border-primary/10 flex items-center justify-between px-4 h-9 text-xs text-muted-foreground"
       >
         <div className="flex items-center gap-1">
-          <span className="hidden sm:inline font-medium text-primary/70 mr-2 flex items-center gap-1">
+          <span className="hidden sm:inline font-medium text-primary/70 mr-2">
             <Type className="h-3 w-3 inline-block mr-1" aria-hidden="true" />
             Accessibility
           </span>
@@ -118,7 +136,7 @@ export default function AccessibilityToolbar() {
         </div>
 
         <button
-          onClick={() => setDismissed(true)}
+          onClick={handleDismiss}
           aria-label="Dismiss accessibility toolbar"
           className="h-7 w-7 rounded flex items-center justify-center hover:bg-primary/10 transition-colors opacity-60 hover:opacity-100"
         >
