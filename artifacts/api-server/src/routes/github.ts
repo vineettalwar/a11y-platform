@@ -482,8 +482,9 @@ function analyzeFileContent(content: string, filePath: string): Finding[] {
   const isHtmlFile = /\.(html|htm)$/i.test(filePath);
 
   for (const rule of WCAG_RULES) {
-    // Page-level rules (missing-main-landmark, missing-skip-nav) only run on HTML files
-    if ((rule.id === "missing-main-landmark" || rule.id === "missing-skip-nav") && !isHtmlFile) {
+    // Page-level rules (missing-main-landmark, missing-skip-nav) only run on HTML/JSX/TSX/Vue/Svelte
+    const isPageFile = isHtmlFile || /\.(jsx|tsx|vue|svelte)$/i.test(filePath);
+    if ((rule.id === "missing-main-landmark" || rule.id === "missing-skip-nav") && !isPageFile) {
       continue;
     }
 
@@ -1274,7 +1275,15 @@ router.get("/github/dashboard", async (req: Request, res: Response) => {
       ? Math.round(scannedRepos.reduce((a, r) => a + (r.score ?? 0), 0) / scannedRepos.length)
       : 0;
 
-    const openIssues = allScanResults.filter((r) => r.status !== "resolved").length;
+    // Only count open issues from the latest scan per repo
+    const latestScanIdsByRepo = new Map<string, string>();
+    for (const [repoName, h] of latestHistoryByRepo) {
+      latestScanIdsByRepo.set(repoName, h.scanId);
+    }
+    const openIssues = allScanResults.filter((r) => {
+      const latestScanId = latestScanIdsByRepo.get(r.repoFullName);
+      return latestScanId && r.scanId === latestScanId && r.status !== "resolved";
+    }).length;
 
     const activityFeed: Array<{ id: string; event: string; time: string; type: string }> = [];
     for (const repo of repos) {

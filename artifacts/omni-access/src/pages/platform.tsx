@@ -1471,7 +1471,7 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
                     onClick={() => setSelectedIssue(issue)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedIssue(issue); } }}
                   >
-                    <TableCell onClick={(e) => { e.stopPropagation(); toggleOne(issue.id); }}>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(issue.id)}
                         onCheckedChange={() => toggleOne(issue.id)}
