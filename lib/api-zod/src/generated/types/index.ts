@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./authorizationSessionHeaderParameter";
+export * from "./authUser";
+export * from "./authUserEnvelope";
+export * from "./beginBrowserLoginParams";
 export * from "./chatMessage";
 export * from "./chatMessageRole";
 export * from "./chatRequest";
@@ -13,6 +17,7 @@ export * from "./connectedRepoItem";
 export * from "./connectedRepoResponse";
 export * from "./connectedReposResponse";
 export * from "./connectRepoRequest";
+export * from "./errorEnvelope";
 export * from "./errorResponse";
 export * from "./getScanResultsParams";
 export * from "./githubConnectRequest";
@@ -20,9 +25,13 @@ export * from "./githubConnectResponse";
 export * from "./githubRepo";
 export * from "./githubReposResponse";
 export * from "./githubStatusResponse";
+export * from "./handleBrowserLoginCallbackParams";
 export * from "./healthStatus";
 export * from "./leadRequest";
 export * from "./leadResponse";
+export * from "./logoutSuccess";
+export * from "./mobileTokenExchangeRequest";
+export * from "./mobileTokenExchangeSuccess";
 export * from "./scanIssue";
 export * from "./scanIssueSeverity";
 export * from "./scanRequest";

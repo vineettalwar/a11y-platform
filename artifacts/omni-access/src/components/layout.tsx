@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Shield, Menu } from "lucide-react";
+import { Shield, Menu, LogOut, User, Loader2 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/sheet";
 import ChatWidget from "./chat-widget";
 import AccessibilityToolbar from "./accessibility-toolbar";
+import { useAuth } from "@workspace/replit-auth-web";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [toolbarDismissed, setToolbarDismissed] = useState(false);
+  const { user, isLoading, isAuthenticated, login, logout } = useAuth();
 
   return (
     <div
@@ -51,6 +53,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 Book Consultation
               </Link>
             </Button>
+            <div className="border-l border-border pl-4 ml-2">
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              ) : isAuthenticated ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5" />
+                    {user?.firstName || user?.email || "Account"}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={logout} className="gap-1.5 text-muted-foreground h-8 px-2">
+                    <LogOut className="w-3.5 h-3.5" />
+                    Log out
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={login}>
+                  Log in
+                </Button>
+              )}
+            </div>
           </nav>
 
           <Sheet>
@@ -92,6 +114,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </Link>
                   </Button>
                 </SheetClose>
+                <div className="border-t border-border pt-4 mt-2">
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  ) : isAuthenticated ? (
+                    <div className="flex flex-col gap-3">
+                      <span className="text-sm text-muted-foreground">
+                        {user?.firstName || user?.email || "Account"}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={logout} className="gap-2 w-full">
+                        <LogOut className="w-3.5 h-3.5" /> Log out
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={login} className="w-full">
+                      Log in
+                    </Button>
+                  )}
+                </div>
               </nav>
             </SheetContent>
           </Sheet>

@@ -4,12 +4,6 @@ import { eq, and, desc } from "drizzle-orm";
 
 const router = Router();
 
-declare module "express-session" {
-  interface SessionData {
-    githubSessionId?: string;
-  }
-}
-
 interface GitHubUser {
   id: number;
   login: string;
@@ -41,13 +35,6 @@ interface GitHubFileResponse {
   content: string;
 }
 
-function getOrCreateSessionId(req: Request): string {
-  if (!req.session.githubSessionId) {
-    req.session.githubSessionId = crypto.randomUUID();
-  }
-  return req.session.githubSessionId;
-}
-
 async function fetchGitHub<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`https://api.github.com${path}`, {
     headers: {
@@ -64,25 +51,30 @@ async function fetchGitHub<T>(path: string, token: string): Promise<T> {
 
 router.post("/github/connect", async (req: Request, res: Response) => {
   try {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "You must be logged in to connect GitHub" });
+      return;
+    }
+
     const { token } = req.body as { token?: unknown };
     if (!token || typeof token !== "string") {
       res.status(400).json({ error: "Token is required" });
       return;
     }
 
+    const userId = req.user.id;
     const user = await fetchGitHub<GitHubUser>("/user", token);
-    const sessionId = getOrCreateSessionId(req);
 
     await db
       .insert(githubConnections)
       .values({
-        sessionId,
+        userId,
         accessToken: token,
         githubLogin: user.login,
         githubUserId: String(user.id),
       })
       .onConflictDoUpdate({
-        target: githubConnections.sessionId,
+        target: githubConnections.userId,
         set: {
           accessToken: token,
           githubLogin: user.login,
@@ -100,16 +92,17 @@ router.post("/github/connect", async (req: Request, res: Response) => {
 
 router.get("/github/status", async (req: Request, res: Response) => {
   try {
-    const sessionId = req.session.githubSessionId;
-    if (!sessionId) {
+    if (!req.isAuthenticated()) {
       res.json({ connected: false });
       return;
     }
 
+    const userId = req.user.id;
+
     const [conn] = await db
       .select()
       .from(githubConnections)
-      .where(eq(githubConnections.sessionId, sessionId))
+      .where(eq(githubConnections.userId, userId))
       .limit(1);
 
     if (!conn) {
@@ -126,13 +119,16 @@ router.get("/github/status", async (req: Request, res: Response) => {
 
 router.delete("/github/disconnect", async (req: Request, res: Response) => {
   try {
-    const sessionId = req.session.githubSessionId;
-    if (sessionId) {
-      await db.delete(scanResults).where(eq(scanResults.sessionId, sessionId));
-      await db.delete(connectedRepos).where(eq(connectedRepos.sessionId, sessionId));
-      await db.delete(githubConnections).where(eq(githubConnections.sessionId, sessionId));
-      delete req.session.githubSessionId;
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
     }
+
+    const userId = req.user.id;
+    await db.delete(scanResults).where(eq(scanResults.userId, userId));
+    await db.delete(connectedRepos).where(eq(connectedRepos.userId, userId));
+    await db.delete(githubConnections).where(eq(githubConnections.userId, userId));
+
     res.json({ success: true });
   } catch (err: unknown) {
     console.error("Disconnect error:", err);
@@ -142,16 +138,17 @@ router.delete("/github/disconnect", async (req: Request, res: Response) => {
 
 router.get("/github/repos", async (req: Request, res: Response) => {
   try {
-    const sessionId = req.session.githubSessionId;
-    if (!sessionId) {
+    if (!req.isAuthenticated()) {
       res.status(401).json({ error: "Not connected to GitHub" });
       return;
     }
 
+    const userId = req.user.id;
+
     const [conn] = await db
       .select()
       .from(githubConnections)
-      .where(eq(githubConnections.sessionId, sessionId))
+      .where(eq(githubConnections.userId, userId))
       .limit(1);
 
     if (!conn) {
@@ -183,26 +180,32 @@ router.get("/github/repos", async (req: Request, res: Response) => {
 
 router.post("/github/connect-repo", async (req: Request, res: Response) => {
   try {
-    const sessionId = req.session.githubSessionId;
-    if (!sessionId) {
+    if (!req.isAuthenticated()) {
       res.status(401).json({ error: "Not connected to GitHub" });
       return;
     }
+
+    const userId = req.user.id;
 
     const { repoFullName } = req.body as { repoFullName?: unknown };
     if (!repoFullName || typeof repoFullName !== "string") {
       res.status(400).json({ error: "repoFullName is required" });
       return;
     }
+    const repoParts = repoFullName.split("/");
+    if (repoParts.length !== 2 || !repoParts[0] || !repoParts[1]) {
+      res.status(400).json({ error: "repoFullName must be in owner/repo format" });
+      return;
+    }
 
-    const [owner, name] = repoFullName.split("/");
+    const [owner, name] = repoParts;
 
     const existing = await db
       .select()
       .from(connectedRepos)
       .where(
         and(
-          eq(connectedRepos.sessionId, sessionId),
+          eq(connectedRepos.userId, userId),
           eq(connectedRepos.repoFullName, repoFullName),
         ),
       )
@@ -224,7 +227,7 @@ router.post("/github/connect-repo", async (req: Request, res: Response) => {
 
     const [repo] = await db
       .insert(connectedRepos)
-      .values({ sessionId, repoOwner: owner, repoName: name, repoFullName })
+      .values({ userId, repoOwner: owner, repoName: name, repoFullName })
       .returning();
 
     res.json({
@@ -244,16 +247,17 @@ router.post("/github/connect-repo", async (req: Request, res: Response) => {
 
 router.get("/github/connected-repos", async (req: Request, res: Response) => {
   try {
-    const sessionId = req.session.githubSessionId;
-    if (!sessionId) {
+    if (!req.isAuthenticated()) {
       res.json({ repos: [] });
       return;
     }
 
+    const userId = req.user.id;
+
     const repos = await db
       .select()
       .from(connectedRepos)
-      .where(eq(connectedRepos.sessionId, sessionId))
+      .where(eq(connectedRepos.userId, userId))
       .orderBy(desc(connectedRepos.createdAt));
 
     res.json({
@@ -437,16 +441,17 @@ const MAX_FILES = 50;
 
 router.post("/github/scan", async (req: Request, res: Response) => {
   try {
-    const sessionId = req.session.githubSessionId;
-    if (!sessionId) {
+    if (!req.isAuthenticated()) {
       res.status(401).json({ error: "Not connected to GitHub" });
       return;
     }
 
+    const userId = req.user.id;
+
     const [conn] = await db
       .select()
       .from(githubConnections)
-      .where(eq(githubConnections.sessionId, sessionId))
+      .where(eq(githubConnections.userId, userId))
       .limit(1);
 
     if (!conn) {
@@ -459,8 +464,13 @@ router.post("/github/scan", async (req: Request, res: Response) => {
       res.status(400).json({ error: "repoFullName is required" });
       return;
     }
+    const scanParts = repoFullName.split("/");
+    if (scanParts.length !== 2 || !scanParts[0] || !scanParts[1]) {
+      res.status(400).json({ error: "repoFullName must be in owner/repo format" });
+      return;
+    }
 
-    const [owner, repoName] = repoFullName.split("/");
+    const [owner, repoName] = scanParts;
     const scanId = crypto.randomUUID();
 
     const repoInfo = await fetchGitHub<{ default_branch: string }>(
@@ -507,7 +517,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
       .delete(scanResults)
       .where(
         and(
-          eq(scanResults.sessionId, sessionId),
+          eq(scanResults.userId, userId),
           eq(scanResults.repoFullName, repoFullName),
         ),
       );
@@ -515,7 +525,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
     if (allFindings.length > 0) {
       await db.insert(scanResults).values(
         allFindings.map((f) => ({
-          sessionId,
+          userId,
           repoFullName,
           scanId,
           filePath: f.filePath,
@@ -534,7 +544,7 @@ router.post("/github/scan", async (req: Request, res: Response) => {
       .set({ lastScannedAt: new Date() })
       .where(
         and(
-          eq(connectedRepos.sessionId, sessionId),
+          eq(connectedRepos.userId, userId),
           eq(connectedRepos.repoFullName, repoFullName),
         ),
       );
@@ -578,10 +588,9 @@ router.post("/github/scan", async (req: Request, res: Response) => {
 
 router.get("/github/scan-results", async (req: Request, res: Response) => {
   try {
-    const sessionId = req.session.githubSessionId;
     const repoFullName = req.query["repoFullName"];
 
-    if (!sessionId || typeof repoFullName !== "string" || !repoFullName) {
+    if (!req.isAuthenticated() || typeof repoFullName !== "string" || !repoFullName) {
       res.json({
         repoFullName: typeof repoFullName === "string" ? repoFullName : "",
         summary: null,
@@ -590,12 +599,14 @@ router.get("/github/scan-results", async (req: Request, res: Response) => {
       return;
     }
 
+    const userId = req.user.id;
+
     const results = await db
       .select()
       .from(scanResults)
       .where(
         and(
-          eq(scanResults.sessionId, sessionId),
+          eq(scanResults.userId, userId),
           eq(scanResults.repoFullName, repoFullName),
         ),
       )

@@ -1,10 +1,10 @@
-import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const githubConnections = pgTable("github_connections", {
   id: serial("id").primaryKey(),
-  sessionId: text("session_id").notNull().unique(),
+  userId: text("user_id").notNull().unique(),
   accessToken: text("access_token").notNull(),
   githubLogin: text("github_login").notNull(),
   githubUserId: text("github_user_id").notNull(),
@@ -14,7 +14,7 @@ export const githubConnections = pgTable("github_connections", {
 
 export const connectedRepos = pgTable("connected_repos", {
   id: serial("id").primaryKey(),
-  sessionId: text("session_id").notNull(),
+  userId: text("user_id").notNull(),
   repoOwner: text("repo_owner").notNull(),
   repoName: text("repo_name").notNull(),
   repoFullName: text("repo_full_name").notNull(),
@@ -24,7 +24,7 @@ export const connectedRepos = pgTable("connected_repos", {
 
 export const scanResults = pgTable("scan_results", {
   id: serial("id").primaryKey(),
-  sessionId: text("session_id").notNull(),
+  userId: text("user_id").notNull(),
   repoFullName: text("repo_full_name").notNull(),
   scanId: text("scan_id").notNull(),
   filePath: text("file_path").notNull(),

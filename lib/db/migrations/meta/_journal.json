@@ -8,6 +8,13 @@
       "when": 1777736736519,
       "tag": "0000_real_robbie_robertson",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777740000000,
+      "tag": "0001_add_auth_and_migrate_github_to_user_id",
+      "breakpoints": true
     }
   ]
 }

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search, ExternalLink, FileCode2, X } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info, CheckCircle2, Github, RefreshCw, LogOut, ChevronDown, Loader2, Search, ExternalLink, FileCode2, X, LogIn } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetGithubStatusQueryKey, getGetConnectedReposQueryKey, getGetScanResultsQueryKey, type GetScanResultsParams } from "@workspace/api-client-react";
+import { useAuth } from "@workspace/replit-auth-web";
 
 interface Issue {
   id: string;
@@ -77,7 +78,8 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
   const [repoSearch, setRepoSearch] = useState("");
   const [showRepoDropdown, setShowRepoDropdown] = useState(false);
 
-  const { data: status, isLoading: statusLoading } = useGetGithubStatus();
+  const { isAuthenticated, isLoading: authLoading, login } = useAuth();
+  const { data: status, isLoading: statusLoading } = useGetGithubStatus({ query: { enabled: isAuthenticated } });
   const connectMutation = useConnectGithub();
   const disconnectMutation = useDisconnectGithub();
   const { data: reposData, isLoading: reposLoading } = useListGithubRepos({ query: { enabled: status?.connected === true } });
@@ -123,12 +125,34 @@ function GitHubConnectCard({ activeRepo, onSelectRepo }: GitHubConnectCardProps)
 
   const connectedRepos = connectedReposData?.repos ?? [];
 
-  if (statusLoading) {
+  if (authLoading || statusLoading) {
     return (
       <Card>
         <CardContent className="p-6 flex items-center gap-3">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Checking GitHub connection…</span>
+          <span className="text-sm text-muted-foreground">
+            {authLoading ? "Checking session…" : "Checking GitHub connection…"}
+          </span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-serif flex items-center gap-2">
+            <Github className="w-5 h-5" /> GitHub Integration
+          </CardTitle>
+          <CardDescription>
+            Sign in to connect your GitHub account and scan repositories for accessibility violations. Your connection will be remembered across sessions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={login} className="gap-2">
+            <LogIn className="w-4 h-4" /> Sign in to continue
+          </Button>
         </CardContent>
       </Card>
     );
