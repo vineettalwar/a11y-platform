@@ -187,6 +187,10 @@ function GitHubConnectCard({ activeRepo, onSelectRepo, autoOpenConnect }: GitHub
       setScanningRepo(null);
       setScanProgress(null);
       queryClient.invalidateQueries({ queryKey: getGetScanResultsQueryKey({ repoFullName } as GetScanResultsParams) });
+      const [owner, repo] = repoFullName.split("/");
+      if (owner && repo) {
+        queryClient.invalidateQueries({ queryKey: getGetRepoScanHistoryQueryKey(owner, repo) });
+      }
       refetchConnectedRepos();
     });
 
@@ -1309,6 +1313,12 @@ export function IssuesTab({ repoFullName }: { repoFullName: string | null }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [issueStatuses, setIssueStatuses] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setSelectedIssue(null);
+    setIssueStatuses({});
+  }, [repoFullName]);
   const bulkUpdateMutation = useBulkUpdateIssueStatus();
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const queryClient = useQueryClient();
